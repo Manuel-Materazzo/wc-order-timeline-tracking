@@ -90,7 +90,29 @@ class WCOTL_Admin {
         .wcotl-notice-success { background:#eafaf1; border:1px solid #a9dfbf; color:#1e8449; }
         .wcotl-notice-error   { background:#fdf2f0; border:1px solid #f5b7b1; color:#c0392b; }
         .wcotl-actions-row { display:flex; gap:8px; flex-wrap:wrap; }
-        .wcotl-step-voided-badge { font-size:11px; color:#c0392b; font-weight:600; text-transform:uppercase; letter-spacing:.06em; }
+        /* Tooltip container */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: pointer;
+        }
+        /* Tooltip text */
+        .tooltiptext {
+            visibility: hidden; /* Hidden by default */
+            width: 500px;
+            font-size: 12px;
+            background-color: black;
+            color: #ffffff;
+            text-align: center;
+            padding: 5px;
+            border-radius: 6px;
+            position: absolute;
+            z-index: 1;
+        }
+        /* Show the tooltip text on hover */
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+        }
         </style>
         <?php
     }
@@ -371,83 +393,80 @@ class WCOTL_Admin {
 
         <!-- Ordine WooCommerce associato -->
         <div class="wcotl-card" style="margin-bottom:24px;">
-            <h2>Ordine WooCommerce</h2>
-            <p style="font-size:13px;color:#888;margin-bottom:16px;">
-                L'ordine associato a questo codice di tracking. Verrà usato automaticamente per tutti gli step.
-            </p>
             <form method="POST" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
                 <?php wp_nonce_field( 'wcotl_save_order_id_' . $code, '_wpnonce_order_id' ); ?>
                 <input type="hidden" name="wcotl_save_order_id" value="1">
-                <div class="wcotl-form-row" style="margin-bottom:0;flex:1;min-width:180px;">
-                    <label>Numero ordine (ID WooCommerce, opzionale)</label>
+                <div class="wcotl-form-row" style="margin-bottom:0;width:400px;">
+                    <label>Numero ordine (ID WooCommerce)
+                        <span class="dashicons dashicons-info tooltip">
+                            <span class="tooltiptext">
+                                L'ordine associato a questo codice di tracking, verrà usato automaticamente per tutti gli step.
+                            </span>
+                        </span>
+                    </label>
                     <input type="text" name="order_id"
                            value="<?php echo $order_id ?: ''; ?>"
                            placeholder="es. 1042"
                            style="width:100%;padding:9px 12px;border:1.5px solid #e2ddd8;border-radius:7px;font-size:14px;color:#2d2d2d;background:#faf9f7;">
                 </div>
-                <button type="submit" class="wcotl-btn wcotl-btn-primary" style="padding:9px 18px;font-size:13px;white-space:nowrap;">
+                <button type="submit" class="wcotl-btn wcotl-btn-primary" style="padding:9px 18px;width:120px;font-size:13px;white-space:nowrap;">
                     Salva →
                 </button>
                 <?php if ( $order_id ) : ?>
-                    <span style="font-size:12px;color:#1e8449;align-self:center;">
-                        ✓ Ordine <a href="<?php echo esc_url( admin_url('post.php?post=' . $order_id . '&action=edit') ); ?>">#<?php echo $order_id; ?></a>
+                    <span style="font-size:12px;color:#1e8449;padding-bottom:10px;">
+                        ✓ Ordine #<?php echo $order_id; ?>
                     </span>
                 <?php else : ?>
-                    <span style="font-size:12px;color:#888;align-self:center;">Nessun ordine associato</span>
+                    <span style="font-size:12px;color:#888;padding-bottom:10px;">Nessun ordine associato</span>
                 <?php endif; ?>
             </form>
-        </div>
-
-        <!-- Estimated delivery date -->
-        <div class="wcotl-card" style="margin-bottom:24px;">
-            <h2>Data di Consegna Stimata</h2>
-            <p style="font-size:13px;color:#888;margin-bottom:16px;">
-                Visibile al cliente sulla pagina di tracking. Lascia il campo vuoto per nasconderla.
-            </p>
             <form method="POST" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
                 <?php wp_nonce_field( 'wcotl_save_delivery_' . $code, '_wpnonce_delivery' ); ?>
                 <input type="hidden" name="wcotl_save_delivery" value="1">
-                <div class="wcotl-form-row" style="margin-bottom:0;flex:1;min-width:180px;">
-                    <label>Data stimata (opzionale)</label>
+                <div class="wcotl-form-row" style="margin-bottom:0;width:400px;">
+                    <label>Data stimata (opzionale)
+                        <span class="dashicons dashicons-info tooltip">
+                            <span class="tooltiptext">
+                                Visibile al cliente sulla pagina di tracking. Lascia il campo vuoto per nasconderla.
+                            </span>
+                        </span>
+                    </label>
                     <input type="date" name="estimated_delivery"
                            value="<?php echo esc_attr( $estimated_delivery ?: '' ); ?>"
                            style="width:100%;padding:9px 12px;border:1.5px solid #e2ddd8;border-radius:7px;font-size:14px;color:#2d2d2d;background:#faf9f7;">
                 </div>
-                <button type="submit" class="wcotl-btn wcotl-btn-primary" style="padding:9px 18px;font-size:13px;white-space:nowrap;">
+                <button type="submit" class="wcotl-btn wcotl-btn-primary" style="padding:9px 18px;width:120px;font-size:13px;white-space:nowrap;">
                     Salva data →
                 </button>
                 <?php if ( $estimated_delivery ) : ?>
-                    <span style="font-size:12px;color:#1e8449;align-self:center;">
+                    <span style="font-size:12px;color:#1e8449;padding-bottom:10px;">
                         ✓ Attualmente: <?php echo esc_html( (new DateTime($estimated_delivery))->format('d/m/Y') ); ?>
                     </span>
                 <?php else : ?>
-                    <span style="font-size:12px;color:#888;align-self:center;">Non ancora impostata</span>
+                    <span style="font-size:12px;color:#888;padding-bottom:10px;">Non ancora impostata</span>
                 <?php endif; ?>
             </form>
-        </div>
-
-        <!-- Consegna effettuata -->
-        <div class="wcotl-card" style="margin-bottom:24px;border-color:<?php echo $delivered_at ? '#a9dfbf' : '#e2ddd8'; ?>;">
-            <h2 style="color:<?php echo $delivered_at ? '#1e8449' : '#1a1a2e'; ?>;">
-                <?php echo $delivered_at ? '✓ Consegna Effettuata' : 'Consegna Effettuata'; ?>
-            </h2>
-            <p style="font-size:13px;color:#888;margin-bottom:16px;">
-                Imposta questa data per sostituire il banner "Estimated delivery" con il banner verde di consegna completata. Lascia vuoto per tornare alla data stimata.
-            </p>
             <form method="POST" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
                 <?php wp_nonce_field( 'wcotl_save_delivered_' . $code, '_wpnonce_delivered' ); ?>
                 <input type="hidden" name="wcotl_save_delivered" value="1">
-                <div class="wcotl-form-row" style="margin-bottom:0;flex:1;min-width:180px;">
-                    <label>Data consegna effettiva (opzionale)</label>
+                <div class="wcotl-form-row" style="margin-bottom:0;width:400px;">
+                    <label>
+                        Data consegna effettiva (opzionale)
+                        <span class="dashicons dashicons-info tooltip">
+                            <span class="tooltiptext">
+                                Imposta questa data per sostituire il banner 'Estimated delivery' con il banner verde di consegna completata. Lascia vuoto per tornare alla data stimata.
+                            </span>
+                        </span>
+                    </label>
                     <input type="date" name="delivered_at"
                            value="<?php echo esc_attr( $delivered_at ?: '' ); ?>"
                            style="width:100%;padding:9px 12px;border:1.5px solid <?php echo $delivered_at ? '#a9dfbf' : '#e2ddd8'; ?>;border-radius:7px;font-size:14px;color:#2d2d2d;background:<?php echo $delivered_at ? '#eafaf1' : '#faf9f7'; ?>;">
                 </div>
-                <button type="submit" class="wcotl-btn wcotl-btn-primary" style="padding:9px 18px;font-size:13px;white-space:nowrap;background:<?php echo $delivered_at ? '#27ae60' : '#1a1a2e'; ?>;">
+                <button type="submit" class="wcotl-btn wcotl-btn-primary" style="padding:9px 18px;width:120px;font-size:13px;white-space:nowrap;background:<?php echo $delivered_at ? '#27ae60' : '#1a1a2e'; ?>;">
                     <?php echo $delivered_at ? 'Aggiorna →' : 'Segna come consegnato →'; ?>
                 </button>
                 <?php if ( $delivered_at ) : ?>
-                    <span style="font-size:12px;color:#1e8449;align-self:center;">
+                    <span style="font-size:12px;color:#1e8449;padding-bottom:10px;">
                         ✓ Consegnato il: <?php echo esc_html( (new DateTime($delivered_at))->format('d/m/Y') ); ?>
                     </span>
                 <?php else : ?>
