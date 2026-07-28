@@ -288,6 +288,20 @@ class WCOTL_Admin {
             }
         }
 
+        // Aggiorna ordine WooCommerce associato al codice
+        if ( isset( $_POST['wcotl_save_order_id'], $_POST['_wpnonce_order_id'] ) && wp_verify_nonce( $_POST['_wpnonce_order_id'], 'wcotl_save_order_id_' . $code ) ) {
+            $new_order_id = absint( $_POST['order_id'] ?? 0 );
+            if ( $new_order_id ) {
+                WCOTL_DB::set_meta( $code, 'order_id', $new_order_id );
+                // Aggiorna tutti gli step esistenti con il nuovo order_id
+                $wpdb->update( $table, [ 'order_id' => $new_order_id ], [ 'tracking_code' => $code ] );
+            } else {
+                WCOTL_DB::set_meta( $code, 'order_id', '' );
+                $wpdb->update( $table, [ 'order_id' => 0 ], [ 'tracking_code' => $code ] );
+            }
+            $notice = '<div class="wcotl-notice wcotl-notice-success">Ordine aggiornato.</div>';
+        }
+
         // Salva nuovo step
         if ( isset( $_POST['wcotl_add_step'], $_POST['_wpnonce'] ) && wp_verify_nonce( $_POST['_wpnonce'], 'wcotl_add_step' ) ) {
             $label = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ));
@@ -300,9 +314,12 @@ class WCOTL_Admin {
                 $dt = DateTime::createFromFormat( 'Y-m-d\TH:i', $date );
                 if ( ! $dt ) $dt = new DateTime( $date );
 
+                // Usa order_id dai meta del codice
+                $stored_order_id = absint( WCOTL_DB::get_meta( $code, 'order_id' ) );
+
                 $wpdb->insert( $table, [
                     'tracking_code' => $code,
-                    'order_id'      => absint( $_POST['order_id'] ?? 0 ),
+                    'order_id'      => $stored_order_id,
                     'step_date'     => $dt->format('Y-m-d H:i:s'),
                     'step_label'    => $label,
                     'step_note'     => $note,
@@ -317,7 +334,17 @@ class WCOTL_Admin {
         $steps = $wpdb->get_results(
             $wpdb->prepare( "SELECT * FROM {$table} WHERE tracking_code = %s ORDER BY step_date ASC", $code )
         );
-        $order_id           = $steps ? absint( $steps[0]->order_id ) : 0;
+
+        // Leggi order_id dai meta; se non esiste ancora, prova a ricavarlo dagli step (retrocompatibilità)
+        $order_id_meta = WCOTL_DB::get_meta( $code, 'order_id' );
+        if ( $order_id_meta === null || $order_id_meta === '' ) {
+            $order_id_from_steps = $steps ? absint( $steps[0]->order_id ) : 0;
+            if ( $order_id_from_steps ) {
+                WCOTL_DB::set_meta( $code, 'order_id', $order_id_from_steps );
+                $order_id_meta = $order_id_from_steps;
+            }
+        }
+        $order_id           = absint( $order_id_meta );
         $icons              = WCOTL_Icons::map();
         $estimated_delivery = WCOTL_DB::get_meta( $code, 'estimated_delivery' );
         $delivered_at       = WCOTL_DB::get_meta( $code, 'delivered_at' );
@@ -340,6 +367,35 @@ class WCOTL_Admin {
     				</a>
     			</span>
     		</h2>
+        </div>
+
+        <!-- Ordine WooCommerce associato -->
+        <div class="wcotl-card" style="margin-bottom:24px;">
+            <h2>Ordine WooCommerce</h2>
+            <p style="font-size:13px;color:#888;margin-bottom:16px;">
+                L'ordine associato a questo codice di tracking. Verrà usato automaticamente per tutti gli step.
+            </p>
+            <form method="POST" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+                <?php wp_nonce_field( 'wcotl_save_order_id_' . $code, '_wpnonce_order_id' ); ?>
+                <input type="hidden" name="wcotl_save_order_id" value="1">
+                <div class="wcotl-form-row" style="margin-bottom:0;flex:1;min-width:180px;">
+                    <label>Numero ordine (ID WooCommerce, opzionale)</label>
+                    <input type="text" name="order_id"
+                           value="<?php echo $order_id ?: ''; ?>"
+                           placeholder="es. 1042"
+                           style="width:100%;padding:9px 12px;border:1.5px solid #e2ddd8;border-radius:7px;font-size:14px;color:#2d2d2d;background:#faf9f7;">
+                </div>
+                <button type="submit" class="wcotl-btn wcotl-btn-primary" style="padding:9px 18px;font-size:13px;white-space:nowrap;">
+                    Salva →
+                </button>
+                <?php if ( $order_id ) : ?>
+                    <span style="font-size:12px;color:#1e8449;align-self:center;">
+                        ✓ Ordine <a href="<?php echo esc_url( admin_url('post.php?post=' . $order_id . '&action=edit') ); ?>">#<?php echo $order_id; ?></a>
+                    </span>
+                <?php else : ?>
+                    <span style="font-size:12px;color:#888;align-self:center;">Nessun ordine associato</span>
+                <?php endif; ?>
+            </form>
         </div>
 
         <!-- Estimated delivery date -->
@@ -596,10 +652,7 @@ class WCOTL_Admin {
                     </script>
                     <?php endif; ?>
 
-                    <div class="wcotl-form-row">
-                        <label>Ordine WooCommerce (ID numerico, opzionale)</label>
-                        <input type="text" name="order_id" value="<?php echo $order_id ?: ''; ?>" placeholder="es. 1042">
-                    </div>
+
                     <div class="wcotl-form-row">
                         <label>Data e Ora <span style="color:#c0392b">*</span></label>
                         <input type="datetime-local" name="step_date" value="<?php echo esc_attr( date('Y-m-d\TH:i') ); ?>" required>
@@ -636,6 +689,11 @@ class WCOTL_Admin {
             $code = preg_replace('/[^A-Z0-9\-_]/', '', $code);
 
             if ( strlen($code) >= 3 ) {
+                // Salva order_id nei meta se proveniente dall'ordine
+                $order_id_from_post = absint( $_POST['order_id'] ?? 0 );
+                if ( $order_id_from_post ) {
+                    WCOTL_DB::set_meta( $code, 'order_id', $order_id_from_post );
+                }
                 // Redirect a gestione del codice
                 wp_redirect( admin_url('admin.php?page=wcotl-tracking&view=' . urlencode($code) ) );
                 exit;
@@ -645,7 +703,8 @@ class WCOTL_Admin {
         }
 
         // Genera codice suggerito
-        $suggested = 'TRK-' . date('Ymd') . '-' . strtoupper( wp_generate_password(4, false, false) );
+        $suggested  = 'TRK-' . date('Ymd') . '-' . strtoupper( wp_generate_password(4, false, false) );
+        $order_id   = absint( $_GET['order_id'] ?? 0 );
         ?>
         <div class="wrap wcotl-admin">
             <h1>Nuovo Codice di Tracciamento</h1>
@@ -656,11 +715,17 @@ class WCOTL_Admin {
                 <form method="POST">
                     <?php wp_nonce_field('wcotl_create_code'); ?>
                     <input type="hidden" name="wcotl_create_code" value="1">
+                    <?php if ( $order_id ) : ?>
+                        <input type="hidden" name="order_id" value="<?php echo $order_id; ?>">
+                    <?php endif; ?>
                     <div class="wcotl-form-row">
                         <label>Codice tracking</label>
                         <input type="text" name="tracking_code" value="<?php echo esc_attr($suggested); ?>"
                                placeholder="es. TRK-20240518-001" required style="font-family:monospace;letter-spacing:.08em;">
                     </div>
+                    <?php if ( $order_id ) : ?>
+                        <p style="font-size:12px;color:#1e8449;margin-bottom:16px;">✓ Sarà associato automaticamente all'ordine <strong>#<?php echo $order_id; ?></strong>.</p>
+                    <?php endif; ?>
                     <button type="submit" class="wcotl-btn wcotl-btn-primary" style="width:100%;padding:10px;font-size:14px;">Crea e inizia ad aggiungere step →</button>
                 </form>
             </div>

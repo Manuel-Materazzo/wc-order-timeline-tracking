@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       WC Order Timeline Tracking
  * Plugin URI:        https://github.com/your-org/wc-order-timeline-tracking
- * Description:       Gestione personalizzata del tracciamento ordini con timeline editabile. Shortcode: [wc_order_timeline_tracking]
+ * Description:       Personalized order tracking management with editable timeline. Tracking page Shortcode: [wc_order_timeline_tracking]
  * Version:           1.4.0
  * Author:            Custom
  * Text Domain:       wc-order-timeline

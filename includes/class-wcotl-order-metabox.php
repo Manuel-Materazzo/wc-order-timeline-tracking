@@ -35,7 +35,7 @@ class WCOTL_Order_Metabox {
         ?>
         <p style="font-size:12px;color:#888;margin-bottom:8px;">Codici tracking associati a questo ordine:</p>
         <?php if ( empty($codes) ) : ?>
-            <p style="font-size:13px;">Nessuno. <a href="<?php echo admin_url('admin.php?page=wcotl-new-code'); ?>">Crea →</a></p>
+            <p style="font-size:13px;">Nessuno. <a href="<?php echo esc_url( admin_url('admin.php?page=wcotl-new-code&order_id=' . $order_id) ); ?>">Crea →</a></p>
         <?php else : ?>
             <?php foreach ( $codes as $c ) : ?>
                 <p style="margin-bottom:6px;">
