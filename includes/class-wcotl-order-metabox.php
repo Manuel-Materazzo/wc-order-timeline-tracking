@@ -33,15 +33,15 @@ class WCOTL_Order_Metabox {
             $wpdb->prepare( "SELECT DISTINCT tracking_code FROM {$table} WHERE order_id = %d", $order_id )
         );
         ?>
-        <p style="font-size:12px;color:#888;margin-bottom:8px;">Codici tracking associati a questo ordine:</p>
+        <p style="font-size:12px;color:#888;margin-bottom:8px;">Tracking codes associated with this order:</p>
         <?php if ( empty($codes) ) : ?>
-            <p style="font-size:13px;">Nessuno. <a href="<?php echo esc_url( admin_url('admin.php?page=wcotl-new-code&order_id=' . $order_id) ); ?>">Crea →</a></p>
+            <p style="font-size:13px;">None. <a href="<?php echo esc_url( admin_url('admin.php?page=wcotl-new-code&order_id=' . $order_id) ); ?>">Create</a></p>
         <?php else : ?>
             <?php foreach ( $codes as $c ) : ?>
                 <p style="margin-bottom:6px;">
                     <code style="background:#f0ede8;padding:2px 6px;border-radius:4px;"><?php echo esc_html($c); ?></code>
                     &nbsp;
-                    <a href="<?php echo esc_url( admin_url('admin.php?page=wcotl-tracking&view=' . urlencode($c)) ); ?>" style="font-size:12px;">Gestisci</a>
+                    <a href="<?php echo esc_url( admin_url('admin.php?page=wcotl-tracking&view=' . urlencode($c)) ); ?>" style="font-size:12px;">Manage</a>
                 </p>
             <?php endforeach; ?>
         <?php endif; ?>

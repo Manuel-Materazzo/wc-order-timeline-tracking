@@ -24,24 +24,24 @@ class WCOTL_Admin {
         );
         add_submenu_page(
             'wcotl-tracking',
-            'Tutti i Codici',
-            'Tutti i Codici',
+            'All Codes',
+            'All Codes',
             'manage_woocommerce',
             'wcotl-tracking',
             array( 'WCOTL_Admin', 'page_list' )
         );
         add_submenu_page(
             'wcotl-tracking',
-            'Nuovo Codice',
-            '+ Nuovo Codice',
+            'New Code',
+            '+ New Code',
             'manage_woocommerce',
             'wcotl-new-code',
             array( 'WCOTL_Admin', 'page_new_code' )
         );
         add_submenu_page(
             'wcotl-tracking',
-            'Preset Step',
-            'Preset Steps',
+            'Step Presets',
+            'Step Presets',
             'manage_woocommerce',
             'wcotl-presets',
             array( 'WCOTL_Admin_Presets', 'page' )
@@ -144,17 +144,17 @@ class WCOTL_Admin {
         global $wpdb;
         $table = $wpdb->prefix . 'order_timeline';
 
-        // Gestione eliminazione step
+        // Step deletion
         if (
             isset( $_GET['action'], $_GET['step_id'], $_GET['_wpnonce'] ) &&
             $_GET['action'] === 'delete_step' &&
             wp_verify_nonce( $_GET['_wpnonce'], 'wcotl_delete_step' )
         ) {
             $wpdb->delete( $table, [ 'id' => absint( $_GET['step_id'] ) ] );
-            echo '<div class="wcotl-notice wcotl-notice-success">Step eliminato.</div>';
+            echo '<div class="wcotl-notice wcotl-notice-success">Step deleted.</div>';
         }
 
-        // Gestione annullamento step (toggle void)
+        // Void / unvoid step toggle
         if (
             isset( $_GET['action'], $_GET['step_id'], $_GET['_wpnonce'] ) &&
             in_array( $_GET['action'], [ 'void_step', 'unvoid_step' ], true ) &&
@@ -163,14 +163,14 @@ class WCOTL_Admin {
             $step_id = absint( $_GET['step_id'] );
             if ( $_GET['action'] === 'void_step' ) {
                 $wpdb->update( $table, [ 'step_voided' => 1 ], [ 'id' => $step_id ] );
-                echo '<div class="wcotl-notice wcotl-notice-success">Step contrassegnato come non confermato.</div>';
+                echo '<div class="wcotl-notice wcotl-notice-success">Step marked as unconfirmed.</div>';
             } else {
                 $wpdb->update( $table, [ 'step_voided' => 0, 'step_void_reason' => null ], [ 'id' => $step_id ] );
-                echo '<div class="wcotl-notice wcotl-notice-success">Step ripristinato.</div>';
+                echo '<div class="wcotl-notice wcotl-notice-success">Step restored.</div>';
             }
         }
 
-        // Gestione modifica step (POST)
+        // Edit step (POST)
         if (
             isset( $_POST['wcotl_edit_step'], $_POST['_wpnonce_edit'], $_POST['step_id'] ) &&
             wp_verify_nonce( $_POST['_wpnonce_edit'], 'wcotl_edit_step_' . absint( $_POST['step_id'] ) )
@@ -190,23 +190,23 @@ class WCOTL_Admin {
                     'step_note'  => $note,
                     'step_icon'  => $icon,
                 ], [ 'id' => $step_id ] );
-                echo '<div class="wcotl-notice wcotl-notice-success">Step modificato con successo!</div>';
+                echo '<div class="wcotl-notice wcotl-notice-success">Step updated successfully!</div>';
             } else {
-                echo '<div class="wcotl-notice wcotl-notice-error">Compila almeno Data/Ora e Descrizione.</div>';
+                echo '<div class="wcotl-notice wcotl-notice-error">Please fill in at least Date/Time and Description.</div>';
             }
         }
 
-        // Gestione eliminazione codice (tutti gli step)
+        // Delete tracking code (all steps)
         if (
             isset( $_GET['action'], $_GET['tracking_code'], $_GET['_wpnonce'] ) &&
             $_GET['action'] === 'delete_code' &&
             wp_verify_nonce( $_GET['_wpnonce'], 'wcotl_delete_code' )
         ) {
             $wpdb->delete( $table, [ 'tracking_code' => sanitize_text_field( $_GET['tracking_code'] ) ] );
-            echo '<div class="wcotl-notice wcotl-notice-success">Codice eliminato.</div>';
+            echo '<div class="wcotl-notice wcotl-notice-success">Code deleted.</div>';
         }
 
-        // Recupera tutti i codici distinti
+        // Fetch all distinct tracking codes
         $codes = $wpdb->get_results(
             "SELECT tracking_code, order_id, COUNT(*) as steps, MAX(step_date) as last_update
              FROM {$table}
@@ -220,7 +220,7 @@ class WCOTL_Admin {
             <h1>
                 <span class="dashicons dashicons-location-alt"></span>
                 Timeline Tracking
-                <a href="<?php echo admin_url('admin.php?page=wcotl-new-code'); ?>" class="wcotl-btn wcotl-btn-primary" style="font-size:13px;margin-left:8px;">+ Nuovo Codice</a>
+                <a href="<?php echo admin_url('admin.php?page=wcotl-new-code'); ?>" class="wcotl-btn wcotl-btn-primary" style="font-size:13px;margin-left:8px;">+ New Code</a>
             </h1>
 
             <?php if ( $view_code ) :
@@ -228,16 +228,16 @@ class WCOTL_Admin {
             else : ?>
 
             <?php if ( empty( $codes ) ) : ?>
-                <div class="wcotl-card"><p>Nessun codice di tracciamento trovato. <a href="<?php echo admin_url('admin.php?page=wcotl-new-code'); ?>">Crea il primo →</a></p></div>
+                <div class="wcotl-card"><p>No tracking codes found. <a href="<?php echo admin_url('admin.php?page=wcotl-new-code'); ?>">Create the first one</a></p></div>
             <?php else : ?>
                 <table class="wcotl-table">
                     <thead>
                         <tr>
-                            <th>Codice Tracking</th>
-                            <th>Ordine WC</th>
-                            <th>Step</th>
-                            <th>Ultimo aggiornamento</th>
-                            <th>Azioni</th>
+                            <th>Tracking Code</th>
+                            <th>WC Order</th>
+                            <th>Steps</th>
+                            <th>Last Update</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -256,9 +256,9 @@ class WCOTL_Admin {
                         <td><?php echo esc_html( $dt->format('d/m/Y H:i') ); ?></td>
                         <td>
                             <div class="wcotl-actions-row">
-                                <a href="<?php echo esc_url( $view_url ); ?>" class="wcotl-btn wcotl-btn-secondary wcotl-btn-sm">Gestisci</a>
+                                <a href="<?php echo esc_url( $view_url ); ?>" class="wcotl-btn wcotl-btn-secondary wcotl-btn-sm">Manage</a>
                                 <a href="<?php echo esc_url( $delete_url ); ?>" class="wcotl-btn wcotl-btn-danger wcotl-btn-sm"
-                                   onclick="return confirm('Eliminare tutti gli step di questo codice?')">Elimina</a>
+                                   onclick="return confirm('Delete all steps for this code?')">Delete</a>
                             </div>
                         </td>
                     </tr>
@@ -276,21 +276,21 @@ class WCOTL_Admin {
         $table  = $wpdb->prefix . 'order_timeline';
         $notice = '';
 
-        // Salva data di consegna stimata
+        // Save estimated delivery date
         if ( isset( $_POST['wcotl_save_delivery'], $_POST['_wpnonce_delivery'] ) && wp_verify_nonce( $_POST['_wpnonce_delivery'], 'wcotl_save_delivery_' . $code ) ) {
             $delivery_date = sanitize_text_field( $_POST['estimated_delivery'] ?? '' );
             WCOTL_DB::set_meta( $code, 'estimated_delivery', $delivery_date );
-            $notice = '<div class="wcotl-notice wcotl-notice-success">Data di consegna stimata aggiornata.</div>';
+            $notice = '<div class="wcotl-notice wcotl-notice-success">Estimated delivery date updated.</div>';
         }
 
-        // Salva data di consegna effettiva
+        // Save actual delivery date
         if ( isset( $_POST['wcotl_save_delivered'], $_POST['_wpnonce_delivered'] ) && wp_verify_nonce( $_POST['_wpnonce_delivered'], 'wcotl_save_delivered_' . $code ) ) {
             $delivered_date = sanitize_text_field( $_POST['delivered_at'] ?? '' );
             WCOTL_DB::set_meta( $code, 'delivered_at', $delivered_date );
-            $notice = '<div class="wcotl-notice wcotl-notice-success">Data di consegna effettiva aggiornata.</div>';
+            $notice = '<div class="wcotl-notice wcotl-notice-success">Actual delivery date updated.</div>';
         }
 
-        // Salva motivo annullamento step
+        // Save step void reason
         if ( isset( $_POST['wcotl_save_void_reason'], $_POST['_wpnonce_void'], $_POST['step_id'] ) && wp_verify_nonce( $_POST['_wpnonce_void'], 'wcotl_void_reason_' . absint( $_POST['step_id'] ) ) ) {
             $step_id     = absint( $_POST['step_id'] );
             $void_reason = sanitize_textarea_field( wp_unslash( $_POST['step_void_reason'] ?? '' ));
@@ -298,19 +298,19 @@ class WCOTL_Admin {
                 'step_voided'      => 1,
                 'step_void_reason' => $void_reason,
             ], [ 'id' => $step_id ] );
-            $notice = '<div class="wcotl-notice wcotl-notice-success">Step contrassegnato come non confermato.</div>';
+            $notice = '<div class="wcotl-notice wcotl-notice-success">Step marked as unconfirmed.</div>';
         }
 
-        // Ripristina step annullato
+        // Restore voided step
         if ( isset( $_GET['action'], $_GET['step_id'], $_GET['_wpnonce'] ) &&
             $_GET['action'] === 'unvoid_step' &&
             wp_verify_nonce( $_GET['_wpnonce'], 'wcotl_void_step_' . absint( $_GET['step_id'] ) ) ) {
             $step_id = absint( $_GET['step_id'] );
             $wpdb->update( $table, [ 'step_voided' => 0, 'step_void_reason' => null ], [ 'id' => $step_id ] );
-            $notice = '<div class="wcotl-notice wcotl-notice-success">Step ripristinato.</div>';
+            $notice = '<div class="wcotl-notice wcotl-notice-success">Step restored.</div>';
         }
 
-        // Salva modifica step
+        // Edit step
         if ( isset( $_POST['wcotl_edit_step'], $_POST['_wpnonce_edit'], $_POST['step_id'] ) && wp_verify_nonce( $_POST['_wpnonce_edit'], 'wcotl_edit_step_' . absint( $_POST['step_id'] ) ) ) {
             $step_id = absint( $_POST['step_id'] );
             $label   = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ));
@@ -327,27 +327,27 @@ class WCOTL_Admin {
                     'step_note'  => $note,
                     'step_icon'  => $icon,
                 ], [ 'id' => $step_id ] );
-                $notice = '<div class="wcotl-notice wcotl-notice-success">Step modificato con successo!</div>';
+                $notice = '<div class="wcotl-notice wcotl-notice-success">Step updated successfully!</div>';
             } else {
-                $notice = '<div class="wcotl-notice wcotl-notice-error">Compila almeno Data/Ora e Descrizione.</div>';
+                $notice = '<div class="wcotl-notice wcotl-notice-error">Please fill in at least Date/Time and Description.</div>';
             }
         }
 
-        // Aggiorna ordine WooCommerce associato al codice
+        // Update WooCommerce order associated with code
         if ( isset( $_POST['wcotl_save_order_id'], $_POST['_wpnonce_order_id'] ) && wp_verify_nonce( $_POST['_wpnonce_order_id'], 'wcotl_save_order_id_' . $code ) ) {
             $new_order_id = absint( $_POST['order_id'] ?? 0 );
             if ( $new_order_id ) {
                 WCOTL_DB::set_meta( $code, 'order_id', $new_order_id );
-                // Aggiorna tutti gli step esistenti con il nuovo order_id
+                // Update existing steps with new order_id
                 $wpdb->update( $table, [ 'order_id' => $new_order_id ], [ 'tracking_code' => $code ] );
             } else {
                 WCOTL_DB::set_meta( $code, 'order_id', '' );
                 $wpdb->update( $table, [ 'order_id' => 0 ], [ 'tracking_code' => $code ] );
             }
-            $notice = '<div class="wcotl-notice wcotl-notice-success">Ordine aggiornato.</div>';
+            $notice = '<div class="wcotl-notice wcotl-notice-success">Order updated.</div>';
         }
 
-        // Salva nuovo step
+        // Save new step
         if ( isset( $_POST['wcotl_add_step'], $_POST['_wpnonce'] ) && wp_verify_nonce( $_POST['_wpnonce'], 'wcotl_add_step' ) ) {
             $label = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ));
             $note  = sanitize_textarea_field( wp_unslash( $_POST['step_note'] ?? '' ));
@@ -355,11 +355,9 @@ class WCOTL_Admin {
             $icon  = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ));
 
             if ( $label && $date ) {
-                // Converte da datetime-local (Y-m-dTH:i) a MySQL datetime
                 $dt = DateTime::createFromFormat( 'Y-m-d\TH:i', $date );
                 if ( ! $dt ) $dt = new DateTime( $date );
 
-                // Usa order_id dai meta del codice
                 $stored_order_id = absint( WCOTL_DB::get_meta( $code, 'order_id' ) );
 
                 $wpdb->insert( $table, [
@@ -370,9 +368,9 @@ class WCOTL_Admin {
                     'step_note'     => $note,
                     'step_icon'     => $icon,
                 ] );
-                $notice = '<div class="wcotl-notice wcotl-notice-success">Step aggiunto con successo!</div>';
+                $notice = '<div class="wcotl-notice wcotl-notice-success">Step added successfully!</div>';
             } else {
-                $notice = '<div class="wcotl-notice wcotl-notice-error">Compila almeno Data/Ora e Descrizione.</div>';
+                $notice = '<div class="wcotl-notice wcotl-notice-error">Please fill in at least Date/Time and Description.</div>';
             }
         }
 
@@ -380,7 +378,6 @@ class WCOTL_Admin {
             $wpdb->prepare( "SELECT * FROM {$table} WHERE tracking_code = %s ORDER BY step_date ASC", $code )
         );
 
-        // Leggi order_id dai meta; se non esiste ancora, prova a ricavarlo dagli step (retrocompatibilità)
         $order_id_meta = WCOTL_DB::get_meta( $code, 'order_id' );
         if ( $order_id_meta === null || $order_id_meta === '' ) {
             $order_id_from_steps = $steps ? absint( $steps[0]->order_id ) : 0;
@@ -407,15 +404,15 @@ class WCOTL_Admin {
         echo wp_kses_post( $notice );
         ?>
         <p>
-    		<a href="<?php echo admin_url('admin.php?page=wcotl-tracking'); ?>">← Torna alla lista</a>
+    		<a href="<?php echo admin_url('admin.php?page=wcotl-tracking'); ?>">← Back to list</a>
     	</p>
     	
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
     		<?php if ( $order_id ) : ?>
-                <a href="<?php echo esc_url( admin_url('post.php?post=' . $order_id . '&action=edit') ); ?>" class="wcotl-btn wcotl-btn-secondary wcotl-btn-sm">Ordine #<?php echo $order_id; ?></a>
+                <a href="<?php echo esc_url( admin_url('post.php?post=' . $order_id . '&action=edit') ); ?>" class="wcotl-btn wcotl-btn-secondary wcotl-btn-sm">Order #<?php echo $order_id; ?></a>
             <?php endif; ?>
     		<h2 style="margin:0;">
-    			Codice: 
+    			Code: 
     			<span class="wcotl-code-badge">
     				<a target="_blank" href="<?php echo esc_url( add_query_arg( 'tracking', $code, home_url( '/order-tracking/' ) ) ); ?>">
     					<?php echo esc_html($code); ?>
@@ -424,43 +421,43 @@ class WCOTL_Admin {
     		</h2>
         </div>
 
-        <!-- Ordine WooCommerce associato -->
+        <!-- Associated WooCommerce Order -->
         <div class="wcotl-card" style="margin-bottom:24px;">
             <form method="POST" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
                 <?php wp_nonce_field( 'wcotl_save_order_id_' . $code, '_wpnonce_order_id' ); ?>
                 <input type="hidden" name="wcotl_save_order_id" value="1">
                 <div class="wcotl-form-row" style="margin-bottom:0;width:400px;">
-                    <label>Numero ordine (ID WooCommerce)
+                    <label>Order number (WooCommerce ID)
                         <span class="dashicons dashicons-info tooltip">
                             <span class="tooltiptext">
-                                L'ordine associato a questo codice di tracking, verrà usato automaticamente per tutti gli step.
+                                The order associated with this tracking code will be automatically used for all steps.
                             </span>
                         </span>
                     </label>
                     <input type="text" name="order_id"
                            value="<?php echo $order_id ?: ''; ?>"
-                           placeholder="es. 1042"
+                           placeholder="e.g. 1042"
                            style="width:100%;padding:9px 12px;border:1.5px solid #e2ddd8;border-radius:7px;font-size:14px;color:#2d2d2d;background:#faf9f7;">
                 </div>
                 <button type="submit" class="wcotl-btn wcotl-btn-primary" style="padding:9px 18px;width:120px;font-size:13px;white-space:nowrap;">
-                    Salva →
+                    Save
                 </button>
                 <?php if ( $order_id ) : ?>
                     <span style="font-size:12px;color:#1e8449;padding-bottom:10px;">
-                        ✓ Ordine #<?php echo $order_id; ?>
+                        ✓ Order #<?php echo $order_id; ?>
                     </span>
                 <?php else : ?>
-                    <span style="font-size:12px;color:#888;padding-bottom:10px;">Nessun ordine associato</span>
+                    <span style="font-size:12px;color:#888;padding-bottom:10px;">No order associated</span>
                 <?php endif; ?>
             </form>
             <form method="POST" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
                 <?php wp_nonce_field( 'wcotl_save_delivery_' . $code, '_wpnonce_delivery' ); ?>
                 <input type="hidden" name="wcotl_save_delivery" value="1">
                 <div class="wcotl-form-row" style="margin-bottom:0;width:400px;">
-                    <label>Data stimata (opzionale)
+                    <label>Estimated date (optional)
                         <span class="dashicons dashicons-info tooltip">
                             <span class="tooltiptext">
-                                Visibile al cliente sulla pagina di tracking. Lascia il campo vuoto per nasconderla.
+                                Visible to the customer on the tracking page. Leave blank to hide.
                             </span>
                         </span>
                     </label>
@@ -469,14 +466,14 @@ class WCOTL_Admin {
                            style="width:100%;padding:9px 12px;border:1.5px solid #e2ddd8;border-radius:7px;font-size:14px;color:#2d2d2d;background:#faf9f7;">
                 </div>
                 <button type="submit" class="wcotl-btn wcotl-btn-primary" style="padding:9px 18px;width:120px;font-size:13px;white-space:nowrap;">
-                    Salva data →
+                    Save date
                 </button>
                 <?php if ( $estimated_delivery ) : ?>
                     <span style="font-size:12px;color:#1e8449;padding-bottom:10px;">
-                        ✓ Attualmente: <?php echo esc_html( (new DateTime($estimated_delivery))->format('d/m/Y') ); ?>
+                        ✓ Currently: <?php echo esc_html( (new DateTime($estimated_delivery))->format('d/m/Y') ); ?>
                     </span>
                 <?php else : ?>
-                    <span style="font-size:12px;color:#888;padding-bottom:10px;">Non ancora impostata</span>
+                    <span style="font-size:12px;color:#888;padding-bottom:10px;">Not set yet</span>
                 <?php endif; ?>
             </form>
             <form method="POST" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
@@ -484,10 +481,10 @@ class WCOTL_Admin {
                 <input type="hidden" name="wcotl_save_delivered" value="1">
                 <div class="wcotl-form-row" style="margin-bottom:0;width:400px;">
                     <label>
-                        Data consegna effettiva (opzionale)
+                        Actual delivery date (optional)
                         <span class="dashicons dashicons-info tooltip">
                             <span class="tooltiptext">
-                                Imposta questa data per sostituire il banner 'Estimated delivery' con il banner verde di consegna completata. Lascia vuoto per tornare alla data stimata.
+                                Set this date to replace the 'Estimated delivery' banner with the green completed delivery banner. Leave blank to revert to estimated date.
                             </span>
                         </span>
                     </label>
@@ -496,14 +493,14 @@ class WCOTL_Admin {
                            style="width:100%;padding:9px 12px;border:1.5px solid <?php echo $delivered_at ? '#a9dfbf' : '#e2ddd8'; ?>;border-radius:7px;font-size:14px;color:#2d2d2d;background:<?php echo $delivered_at ? '#eafaf1' : '#faf9f7'; ?>;">
                 </div>
                 <button type="submit" class="wcotl-btn wcotl-btn-primary" style="padding:9px 18px;width:120px;font-size:13px;white-space:nowrap;background:<?php echo $delivered_at ? '#27ae60' : '#1a1a2e'; ?>;">
-                    <?php echo $delivered_at ? 'Aggiorna →' : 'Segna come consegnato →'; ?>
+                    <?php echo $delivered_at ? 'Update' : 'Mark as delivered'; ?>
                 </button>
                 <?php if ( $delivered_at ) : ?>
                     <span style="font-size:12px;color:#1e8449;padding-bottom:10px;">
-                        ✓ Consegnato il: <?php echo esc_html( (new DateTime($delivered_at))->format('d/m/Y') ); ?>
+                        ✓ Delivered on: <?php echo esc_html( (new DateTime($delivered_at))->format('d/m/Y') ); ?>
                     </span>
                 <?php else : ?>
-                    <span style="font-size:12px;color:#888;align-self:center;">Non ancora consegnato</span>
+                    <span style="font-size:12px;color:#888;align-self:center;">Not delivered yet</span>
                 <?php endif; ?>
             </form>
         </div>
@@ -513,8 +510,8 @@ class WCOTL_Admin {
             <h2>🛰 Auto-Tracking (17TRACK)</h2>
             <?php if ( ! $provider_active ) : ?>
                 <p style="font-size:13px;color:#888;">
-                    Auto-tracking non attivo. Configura la tua API key in
-                    <a href="<?php echo esc_url( admin_url('admin.php?page=wcotl-settings') ); ?>">Impostazioni</a>.
+                    Auto-tracking is not active. Configure your API key in
+                    <a href="<?php echo esc_url( admin_url('admin.php?page=wcotl-settings') ); ?>">Settings</a>.
                 </p>
             <?php else : ?>
 
@@ -522,58 +519,58 @@ class WCOTL_Admin {
             <div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                 <?php if ( $at_real_number ) : ?>
                     <?php if ( $at_stopped ) : ?>
-                        <span class="wcotl-sync-status wcotl-sync-stopped">⏹ Sync fermato</span>
+                        <span class="wcotl-sync-status wcotl-sync-stopped">⏹ Sync stopped</span>
                         <?php if ( $at_stop_reason ) : ?>
                             <span style="font-size:12px;color:#888;"><?php echo esc_html($at_stop_reason); ?></span>
                         <?php endif; ?>
                         <button class="wcotl-btn wcotl-btn-sm" style="background:#eafaf1;color:#1e8449;border:1px solid #a9dfbf;"
-                                onclick="wcotlResumeSync()">↺ Riprendi sync</button>
+                                onclick="wcotlResumeSync()">↺ Resume sync</button>
                     <?php elseif ( $at_registered ) : ?>
-                        <span class="wcotl-sync-status wcotl-sync-active">✓ Sync attivo</span>
+                        <span class="wcotl-sync-status wcotl-sync-active">✓ Sync active</span>
                         <?php if ( $at_last_status ) : ?>
-                            <span style="font-size:12px;color:#888;">Stato: <strong><?php echo esc_html($at_last_status); ?></strong></span>
+                            <span style="font-size:12px;color:#888;">Status: <strong><?php echo esc_html($at_last_status); ?></strong></span>
                         <?php endif; ?>
                         <?php if ( $at_last_event ) : ?>
-                            <span style="font-size:12px;color:#888;">Ultimo evento: <?php echo esc_html((new DateTime($at_last_event))->format('d/m/Y H:i')); ?></span>
+                            <span style="font-size:12px;color:#888;">Last event: <?php echo esc_html((new DateTime($at_last_event))->format('d/m/Y H:i')); ?></span>
                         <?php endif; ?>
                     <?php else : ?>
-                        <span class="wcotl-sync-status wcotl-sync-pending">⏳ In attesa di prima sync</span>
+                        <span class="wcotl-sync-status wcotl-sync-pending">⏳ Waiting for first sync</span>
                     <?php endif; ?>
 
                     <?php if ( $at_real_number && ! $at_stopped ) : ?>
                         <button class="wcotl-btn wcotl-btn-secondary wcotl-btn-sm" id="wcotl-sync-now-btn"
                                 onclick="wcotlSyncNow()">
-                            ↻ Sync ora
+                            ↻ Sync now
                         </button>
                     <?php endif; ?>
                 <?php else : ?>
-                    <span class="wcotl-sync-status wcotl-sync-pending">— Nessun numero tracking reale impostato</span>
+                    <span class="wcotl-sync-status wcotl-sync-pending">— No real tracking number set</span>
                 <?php endif; ?>
             </div>
 
             <!-- Real tracking number form -->
             <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
                 <div class="wcotl-form-row" style="margin-bottom:0;width:260px;">
-                    <label>Numero tracking corriere
+                    <label>Carrier tracking number
                         <span class="dashicons dashicons-info tooltip">
-                            <span class="tooltiptext">Il codice tracking reale del corriere (es. RR123456789CN). Questo viene usato per interrogare 17TRACK.</span>
+                            <span class="tooltiptext">The real carrier tracking code (e.g. RR123456789CN). Used to query 17TRACK.</span>
                         </span>
                     </label>
                     <input type="text" id="wcotl-real-number"
                            value="<?php echo esc_attr($at_real_number ?: ''); ?>"
-                           placeholder="es. RR123456789CN"
+                           placeholder="e.g. RR123456789CN"
                            style="font-family:monospace;letter-spacing:.06em;">
                 </div>
                 <div class="wcotl-form-row" style="margin-bottom:0;width:260px;">
-                    <label>Corriere
+                    <label>Carrier
                         <span class="dashicons dashicons-info tooltip">
-                            <span class="tooltiptext">Seleziona il corriere o usa "Auto-detect" per suggerimenti da 17TRACK. Se lasci 0 / Auto, 17TRACK prova a rilevarlo automaticamente.</span>
+                            <span class="tooltiptext">Select carrier or use "Auto-detect" for suggestions from 17TRACK. If set to Auto, 17TRACK attempts auto-detection.</span>
                         </span>
                     </label>
                     <select id="wcotl-carrier-select" style="font-size:13px;">
                         <option value="0">— Auto-detect —</option>
                         <?php if ( $at_carrier ) : ?>
-                            <option value="<?php echo $at_carrier; ?>" selected>Corriere #<?php echo $at_carrier; ?> (salvato)</option>
+                            <option value="<?php echo $at_carrier; ?>" selected>Carrier #<?php echo $at_carrier; ?> (saved)</option>
                         <?php endif; ?>
                     </select>
                 </div>
@@ -581,7 +578,7 @@ class WCOTL_Admin {
                     <button class="wcotl-btn wcotl-btn-secondary wcotl-btn-sm" style="white-space:nowrap;"
                             onclick="wcotlDetectCarriers()">🔍 Detect carrier</button>
                     <button class="wcotl-btn wcotl-btn-primary wcotl-btn-sm" style="white-space:nowrap;"
-                            onclick="wcotlSaveAutoTracking()">💾 Salva</button>
+                            onclick="wcotlSaveAutoTracking()">💾 Save</button>
                 </div>
             </div>
             <div id="wcotl-at-message" style="font-size:12px;margin-top:4px;"></div>
@@ -591,9 +588,9 @@ class WCOTL_Admin {
 
             function wcotlDetectCarriers() {
                 var num = document.getElementById('wcotl-real-number').value.trim();
-                if (!num) { alert('Inserisci prima il numero tracking corriere.'); return; }
+                if (!num) { alert('Please enter carrier tracking number first.'); return; }
                 var msg = document.getElementById('wcotl-at-message');
-                msg.textContent = '⏳ Rilevamento in corso...';
+                msg.textContent = '⏳ Detecting...';
                 fetch(WCOTL_AJAX.url, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -603,12 +600,12 @@ class WCOTL_Admin {
                         number: num
                     })
                 }).then(r => r.json()).then(res => {
-                    if (!res.success) { msg.textContent = '❌ ' + (res.data || 'Errore'); return; }
+                    if (!res.success) { msg.textContent = '❌ ' + (res.data || 'Error'); return; }
                     var carriers = res.data;
                     var sel = document.getElementById('wcotl-carrier-select');
                     sel.innerHTML = '<option value="0">— Auto-detect —</option>';
                     if (Object.keys(carriers).length === 0) {
-                        msg.textContent = '⚠ Nessun corriere rilevato. Seleziona manualmente.';
+                        msg.textContent = '⚠ No carrier detected. Select manually.';
                     } else {
                         for (var code in carriers) {
                             var opt = document.createElement('option');
@@ -617,17 +614,17 @@ class WCOTL_Admin {
                             sel.appendChild(opt);
                         }
                         sel.selectedIndex = 1;
-                        msg.textContent = '✓ ' + Object.keys(carriers).length + ' corriere/i trovato/i. Seleziona e salva.';
+                        msg.textContent = '✓ ' + Object.keys(carriers).length + ' carrier(s) found. Select and save.';
                         msg.style.color = '#1e8449';
                     }
-                }).catch(e => { msg.textContent = '❌ Errore di rete.'; });
+                }).catch(e => { msg.textContent = '❌ Network error.'; });
             }
 
             function wcotlSaveAutoTracking() {
                 var num     = document.getElementById('wcotl-real-number').value.trim();
                 var carrier = document.getElementById('wcotl-carrier-select').value;
                 var msg     = document.getElementById('wcotl-at-message');
-                msg.textContent = '⏳ Salvataggio...';
+                msg.textContent = '⏳ Saving...';
                 fetch(WCOTL_AJAX.url, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -639,11 +636,11 @@ class WCOTL_Admin {
                         carrier_code:  carrier
                     })
                 }).then(r => r.json()).then(res => {
-                    if (!res.success) { msg.style.color='#c0392b'; msg.textContent = '❌ ' + (res.data || 'Errore'); return; }
+                    if (!res.success) { msg.style.color='#c0392b'; msg.textContent = '❌ ' + (res.data || 'Error'); return; }
                     msg.style.color = '#1e8449';
-                    msg.textContent = '✓ Salvato! La prima sync avverrà al prossimo cron (o usa "Sync ora").';
+                    msg.textContent = '✓ Saved! First sync will occur on next cron run (or click "Sync now").';
                     setTimeout(() => location.reload(), 1800);
-                }).catch(e => { msg.textContent = '❌ Errore di rete.'; });
+                }).catch(e => { msg.textContent = '❌ Network error.'; });
             }
 
             function wcotlSyncNow() {
@@ -651,7 +648,7 @@ class WCOTL_Admin {
                 if (btn) btn.disabled = true;
                 var msg = document.getElementById('wcotl-at-message');
                 msg.style.color = '#888';
-                msg.textContent = '⏳ Sync in corso...';
+                msg.textContent = '⏳ Syncing...';
                 fetch(WCOTL_AJAX.url, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -661,16 +658,16 @@ class WCOTL_Admin {
                         tracking_code: WCOTL_TRACKING_CODE
                     })
                 }).then(r => r.json()).then(res => {
-                    if (!res.success) { msg.style.color='#c0392b'; msg.textContent = '❌ ' + (res.data || 'Errore'); if(btn)btn.disabled=false; return; }
+                    if (!res.success) { msg.style.color='#c0392b'; msg.textContent = '❌ ' + (res.data || 'Error'); if(btn)btn.disabled=false; return; }
                     msg.style.color = '#1e8449';
-                    msg.textContent = '✓ Sync completata! Stato: ' + (res.data.status || '?');
+                    msg.textContent = '✓ Sync complete! Status: ' + (res.data.status || '?');
                     setTimeout(() => location.reload(), 1800);
-                }).catch(e => { msg.textContent = '❌ Errore di rete.'; if(btn)btn.disabled=false; });
+                }).catch(e => { msg.textContent = '❌ Network error.'; if(btn)btn.disabled=false; });
             }
 
             function wcotlResumeSync() {
                 var msg = document.getElementById('wcotl-at-message');
-                msg.textContent = '⏳ Riattivazione...';
+                msg.textContent = '⏳ Resuming...';
                 fetch(WCOTL_AJAX.url, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -680,11 +677,11 @@ class WCOTL_Admin {
                         tracking_code: WCOTL_TRACKING_CODE
                     })
                 }).then(r => r.json()).then(res => {
-                    if (!res.success) { msg.style.color='#c0392b'; msg.textContent = '❌ ' + (res.data || 'Errore'); return; }
+                    if (!res.success) { msg.style.color='#c0392b'; msg.textContent = '❌ ' + (res.data || 'Error'); return; }
                     msg.style.color = '#1e8449';
-                    msg.textContent = '✓ Sync riattivata!';
+                    msg.textContent = '✓ Sync resumed!';
                     setTimeout(() => location.reload(), 1000);
-                }).catch(e => { msg.textContent = '❌ Errore di rete.'; });
+                }).catch(e => { msg.textContent = '❌ Network error.'; });
             }
             </script>
 
@@ -693,11 +690,11 @@ class WCOTL_Admin {
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;">
 
-            <!-- Lista step esistenti -->
+            <!-- Existing steps list -->
             <div class="wcotl-card">
-                <h2>Step nella timeline (<?php echo count($steps); ?>)</h2>
+                <h2>Timeline Steps (<?php echo count($steps); ?>)</h2>
                 <?php if ( empty($steps) ) : ?>
-                    <p style="color:#888;font-size:14px;">Nessuno step ancora. Aggiungine uno →</p>
+                    <p style="color:#888;font-size:14px;">No steps yet. Add one</p>
                 <?php else : ?>
                 <ul class="wcotl-steps-list">
                     <?php foreach ( $steps as $s ) :
@@ -719,13 +716,13 @@ class WCOTL_Admin {
                         $void_reason_nonce = wp_create_nonce( 'wcotl_void_reason_' . $s->id );
                     ?>
                     <li style="flex-direction:column;align-items:stretch;<?php echo $is_voided ? 'opacity:.75;' : ''; ?>">
-                        <!-- Vista normale -->
+                        <!-- Normal view -->
                         <div class="wcotl-step-row" id="wcotl-view-<?php echo $s->id; ?>" style="display:flex;gap:12px;align-items:flex-start;">
                             <div class="wcotl-step-meta" style="flex:1;">
                                 <strong style="<?php echo $is_voided ? 'text-decoration:line-through;color:#a09a94;' : ''; ?>"><?php echo esc_html($s->step_label); ?></strong>
                                 <?php $src = isset($s->step_source) ? $s->step_source : 'manual'; ?>
                                 <span class="wcotl-source-badge <?php echo $src === 'auto' ? 'wcotl-source-auto' : 'wcotl-source-manual'; ?>">
-                                    <?php echo $src === 'auto' ? '🛰 auto' : '✍ manuale'; ?>
+                                    <?php echo $src === 'auto' ? '🛰 auto' : '✍ manual'; ?>
                                 </span>
                                 <small><?php echo esc_html($dt->format('d/m/Y H:i')); ?> &nbsp;·&nbsp; <?php echo esc_html($s->step_icon); ?></small>
                                 <?php if ($s->step_note) : ?>
@@ -733,7 +730,7 @@ class WCOTL_Admin {
                                 <?php endif; ?>
                                 <?php if ( $is_voided ) : ?>
                                     <p style="font-size:11px;color:#c0392b;margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;">
-                                        ⊘ Non confermato<?php if ( $s->step_void_reason ) : ?> — <em style="font-weight:normal;font-style:italic;"><?php echo esc_html($s->step_void_reason); ?></em><?php endif; ?>
+                                        ⊘ Unconfirmed<?php if ( $s->step_void_reason ) : ?> — <em style="font-weight:normal;font-style:italic;"><?php echo esc_html($s->step_void_reason); ?></em><?php endif; ?>
                                     </p>
                                 <?php endif; ?>
                             </div>
@@ -741,46 +738,46 @@ class WCOTL_Admin {
                                 <?php if ( ! $is_voided ) : ?>
                                     <button type="button"
                                             class="wcotl-btn wcotl-btn-secondary wcotl-btn-sm"
-                                            onclick="wcotlToggleEdit(<?php echo $s->id; ?>)" title="Modifica">✎</button>
+                                            onclick="wcotlToggleEdit(<?php echo $s->id; ?>)" title="Edit">✎</button>
                                     <button type="button"
                                             class="wcotl-btn wcotl-btn-sm"
                                             style="background:#fff3cd;color:#856404;border:1px solid #ffc107;"
-                                            onclick="wcotlToggleVoid(<?php echo $s->id; ?>)" title="Segna come non confermato">⊘</button>
+                                            onclick="wcotlToggleVoid(<?php echo $s->id; ?>)" title="Mark as unconfirmed">⊘</button>
                                 <?php else : ?>
                                     <a href="<?php echo esc_url($unvoid_nonce); ?>"
                                        class="wcotl-btn wcotl-btn-sm"
                                        style="background:#eafaf1;color:#1e8449;border:1px solid #a9dfbf;"
-                                       title="Ripristina step">↩ Ripristina</a>
+                                       title="Restore step">↩ Restore</a>
                                 <?php endif; ?>
                                 <a href="<?php echo esc_url($del); ?>"
                                    class="wcotl-btn wcotl-btn-danger wcotl-btn-sm"
-                                   onclick="return confirm('Eliminare questo step?')" title="Elimina">✕</a>
+                                   onclick="return confirm('Delete this step?')" title="Delete">✕</a>
                             </div>
                         </div>
 
-                        <!-- Form modifica inline -->
+                        <!-- Inline edit form -->
                         <div class="wcotl-edit-form" id="wcotl-edit-<?php echo $s->id; ?>" style="display:none;margin-top:12px;background:#faf9f7;border:1.5px solid #c8963e;border-radius:8px;padding:16px;">
-                            <p style="font-size:12px;font-weight:600;color:#c8963e;margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em;">Modifica step</p>
+                            <p style="font-size:12px;font-weight:600;color:#c8963e;margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em;">Edit step</p>
                             <form method="POST">
                                 <input type="hidden" name="wcotl_edit_step" value="1">
                                 <input type="hidden" name="_wpnonce_edit" value="<?php echo esc_attr($edit_nonce); ?>">
                                 <input type="hidden" name="step_id" value="<?php echo $s->id; ?>">
                                 <div class="wcotl-form-row">
-                                    <label>Data e Ora <span style="color:#c0392b">*</span></label>
+                                    <label>Date and Time <span style="color:#c0392b">*</span></label>
                                     <input type="datetime-local" name="step_date"
                                            value="<?php echo esc_attr($dt->format('Y-m-d\TH:i')); ?>" required>
                                 </div>
                                 <div class="wcotl-form-row">
-                                    <label>Descrizione step <span style="color:#c0392b">*</span></label>
+                                    <label>Step description <span style="color:#c0392b">*</span></label>
                                     <input type="text" name="step_label"
                                            value="<?php echo esc_attr($s->step_label); ?>" required>
                                 </div>
                                 <div class="wcotl-form-row">
-                                    <label>Nota aggiuntiva (opzionale)</label>
+                                    <label>Additional note (optional)</label>
                                     <textarea name="step_note"><?php echo esc_textarea($s->step_note); ?></textarea>
                                 </div>
                                 <div class="wcotl-form-row">
-                                    <label>Icona</label>
+                                    <label>Icon</label>
                                     <select name="step_icon">
                                         <?php foreach ( array_keys($icons) as $k ) : ?>
                                             <option value="<?php echo esc_attr($k); ?>" <?php selected($k, $s->step_icon); ?>>
@@ -790,28 +787,28 @@ class WCOTL_Admin {
                                     </select>
                                 </div>
                                 <div style="display:flex;gap:8px;">
-                                    <button type="submit" class="wcotl-btn wcotl-btn-primary wcotl-btn-sm" style="padding:7px 16px;font-size:13px;">Salva modifiche</button>
+                                    <button type="submit" class="wcotl-btn wcotl-btn-primary wcotl-btn-sm" style="padding:7px 16px;font-size:13px;">Save changes</button>
                                     <button type="button" class="wcotl-btn wcotl-btn-secondary wcotl-btn-sm" style="padding:7px 16px;font-size:13px;"
-                                            onclick="wcotlToggleEdit(<?php echo $s->id; ?>)">Annulla</button>
+                                            onclick="wcotlToggleEdit(<?php echo $s->id; ?>)">Cancel</button>
                                 </div>
                             </form>
                         </div>
 
-                        <!-- Form annullamento step (motivo) -->
+                        <!-- Step voiding form (reason) -->
                         <div id="wcotl-void-<?php echo $s->id; ?>" style="display:none;margin-top:12px;background:#fdf2f0;border:1.5px solid #f5b7b1;border-radius:8px;padding:16px;">
-                            <p style="font-size:12px;font-weight:600;color:#c0392b;margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;">⊘ Segna come non confermato</p>
+                            <p style="font-size:12px;font-weight:600;color:#c0392b;margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;">⊘ Mark as unconfirmed</p>
                             <form method="POST">
                                 <input type="hidden" name="wcotl_save_void_reason" value="1">
                                 <input type="hidden" name="_wpnonce_void" value="<?php echo esc_attr($void_reason_nonce); ?>">
                                 <input type="hidden" name="step_id" value="<?php echo $s->id; ?>">
                                 <div class="wcotl-form-row">
-                                    <label>Motivo (visibile al cliente, opzionale)</label>
-                                    <textarea name="step_void_reason" placeholder="es. Informazione errata comunicata dal corriere. La spedizione è ancora in transito."><?php echo esc_textarea( $s->step_void_reason ?? '' ); ?></textarea>
+                                    <label>Reason (visible to customer, optional)</label>
+                                    <textarea name="step_void_reason" placeholder="e.g. Incorrect information provided by carrier. Shipment is still in transit."><?php echo esc_textarea( $s->step_void_reason ?? '' ); ?></textarea>
                                 </div>
                                 <div style="display:flex;gap:8px;">
-                                    <button type="submit" class="wcotl-btn wcotl-btn-sm" style="padding:7px 16px;font-size:13px;background:#c0392b;color:#fff;">Conferma annullamento</button>
+                                    <button type="submit" class="wcotl-btn wcotl-btn-sm" style="padding:7px 16px;font-size:13px;background:#c0392b;color:#fff;">Confirm cancelation</button>
                                     <button type="button" class="wcotl-btn wcotl-btn-secondary wcotl-btn-sm" style="padding:7px 16px;font-size:13px;"
-                                            onclick="wcotlToggleVoid(<?php echo $s->id; ?>)">Annulla</button>
+                                            onclick="wcotlToggleVoid(<?php echo $s->id; ?>)">Cancel</button>
                                 </div>
                             </form>
                         </div>
@@ -825,7 +822,6 @@ class WCOTL_Admin {
                     var isOpen = form.style.display !== 'none';
                     form.style.display = isOpen ? 'none' : 'block';
                     view.style.opacity = isOpen ? '1' : '0.4';
-                    // chiudi void se aperto
                     var voidForm = document.getElementById('wcotl-void-' + id);
                     if (voidForm) voidForm.style.display = 'none';
                 }
@@ -833,7 +829,6 @@ class WCOTL_Admin {
                     var voidForm = document.getElementById('wcotl-void-' + id);
                     var isOpen = voidForm.style.display !== 'none';
                     voidForm.style.display = isOpen ? 'none' : 'block';
-                    // chiudi edit se aperto
                     var editForm = document.getElementById('wcotl-edit-' + id);
                     if (editForm) editForm.style.display = 'none';
                     var view = document.getElementById('wcotl-view-' + id);
@@ -843,9 +838,9 @@ class WCOTL_Admin {
                 <?php endif; ?>
             </div>
 
-            <!-- Form aggiunta step -->
+            <!-- Add step form -->
             <div class="wcotl-card">
-                <h2>Aggiungi uno step</h2>
+                <h2>Add a step</h2>
                 <form method="POST">
                     <?php wp_nonce_field('wcotl_add_step'); ?>
                     <input type="hidden" name="wcotl_add_step" value="1">
@@ -853,9 +848,9 @@ class WCOTL_Admin {
 
                     <?php $presets = WCOTL_DB::get_presets(); if ( ! empty( $presets ) ) : ?>
                     <div class="wcotl-form-row" style="background:#faf5ed;border:1px solid #e8d8b4;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
-                        <label style="color:#9a6e1a;">⚡ Usa un preset</label>
+                        <label style="color:#9a6e1a;">⚡ Use a preset</label>
                         <select id="wcotl-preset-select" style="background:#fff;">
-                            <option value="">— seleziona preset —</option>
+                            <option value="">— select preset —</option>
                             <?php foreach ( $presets as $p ) : ?>
                                 <option value="<?php echo absint($p->id); ?>"
                                         data-label="<?php echo esc_attr($p->step_label); ?>"
@@ -865,7 +860,7 @@ class WCOTL_Admin {
                                 </option>
                             <?php endforeach; ?>
                         </select>
-                        <small style="font-size:11px;color:#aaa;margin-top:4px;">Pre-compila i campi sottostanti. Puoi modificarli prima di salvare.</small>
+                        <small style="font-size:11px;color:#aaa;margin-top:4px;">Pre-fills fields below. You can edit them before saving.</small>
                     </div>
                     <script>
                     document.getElementById('wcotl-preset-select').addEventListener('change', function() {
@@ -882,7 +877,6 @@ class WCOTL_Admin {
                                 }
                             }
                         }
-                        // highlight fields briefly
                         ['step_label','step_note','step_icon'].forEach(function(n) {
                             var el = form.querySelector('[name="' + n + '"]');
                             if (el) { el.style.borderColor = '#c8963e'; setTimeout(function(){ el.style.borderColor = ''; }, 1200); }
@@ -893,26 +887,26 @@ class WCOTL_Admin {
 
 
                     <div class="wcotl-form-row">
-                        <label>Data e Ora <span style="color:#c0392b">*</span></label>
+                        <label>Date and Time <span style="color:#c0392b">*</span></label>
                         <input type="datetime-local" name="step_date" value="<?php echo esc_attr( date('Y-m-d\TH:i') ); ?>" required>
                     </div>
                     <div class="wcotl-form-row">
-                        <label>Descrizione step <span style="color:#c0392b">*</span></label>
-                        <input type="text" name="step_label" placeholder="es. Merce caricata a Milano" required>
+                        <label>Step description <span style="color:#c0392b">*</span></label>
+                        <input type="text" name="step_label" placeholder="e.g. Goods loaded in Milan" required>
                     </div>
                     <div class="wcotl-form-row">
-                        <label>Nota aggiuntiva (opzionale)</label>
-                        <textarea name="step_note" placeholder="Dettagli extra, informazioni al cliente..."></textarea>
+                        <label>Additional note (optional)</label>
+                        <textarea name="step_note" placeholder="Extra details, customer info..."></textarea>
                     </div>
                     <div class="wcotl-form-row">
-                        <label>Icona</label>
+                        <label>Icon</label>
                         <select name="step_icon">
                             <?php foreach ( array_keys($icons) as $k ) : ?>
                                 <option value="<?php echo esc_attr($k); ?>"><?php echo esc_html(ucfirst(str_replace('_',' ',$k))); ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <button type="submit" class="wcotl-btn wcotl-btn-primary" style="width:100%;padding:10px;font-size:14px;">Aggiungi Step →</button>
+                    <button type="submit" class="wcotl-btn wcotl-btn-primary" style="width:100%;padding:10px;font-size:14px;">Add Step</button>
                 </form>
             </div>
 
@@ -928,29 +922,26 @@ class WCOTL_Admin {
             $code = preg_replace('/[^A-Z0-9\-_]/', '', $code);
 
             if ( strlen($code) >= 3 ) {
-                // Salva order_id nei meta se proveniente dall'ordine
                 $order_id_from_post = absint( $_POST['order_id'] ?? 0 );
                 if ( $order_id_from_post ) {
                     WCOTL_DB::set_meta( $code, 'order_id', $order_id_from_post );
                 }
-                // Redirect a gestione del codice
                 wp_redirect( admin_url('admin.php?page=wcotl-tracking&view=' . urlencode($code) ) );
                 exit;
             } else {
-                $notice = '<div class="wcotl-notice wcotl-notice-error">Inserisci un codice valido (minimo 3 caratteri, solo lettere, numeri, trattini).</div>';
+                $notice = '<div class="wcotl-notice wcotl-notice-error">Please enter a valid code (minimum 3 characters, letters, numbers, hyphens only).</div>';
             }
         }
 
-        // Genera codice suggerito
         $suggested  = 'TRK-' . date('Ymd') . '-' . strtoupper( wp_generate_password(4, false, false) );
         $order_id   = absint( $_GET['order_id'] ?? 0 );
         ?>
         <div class="wrap wcotl-admin">
-            <h1>Nuovo Codice di Tracciamento</h1>
+            <h1>New Tracking Code</h1>
             <?php echo wp_kses_post( $notice ); ?>
             <div class="wcotl-card" style="max-width:480px;">
-                <h2>Crea un nuovo codice</h2>
-                <p style="font-size:13px;color:#888;margin-bottom:16px;">Il codice viene comunicato al cliente. Puoi usare qualsiasi formato.</p>
+                <h2>Create a new code</h2>
+                <p style="font-size:13px;color:#888;margin-bottom:16px;">This code will be shared with the customer. Any format is allowed.</p>
                 <form method="POST">
                     <?php wp_nonce_field('wcotl_create_code'); ?>
                     <input type="hidden" name="wcotl_create_code" value="1">
@@ -958,14 +949,14 @@ class WCOTL_Admin {
                         <input type="hidden" name="order_id" value="<?php echo $order_id; ?>">
                     <?php endif; ?>
                     <div class="wcotl-form-row">
-                        <label>Codice tracking</label>
+                        <label>Tracking code</label>
                         <input type="text" name="tracking_code" value="<?php echo esc_attr($suggested); ?>"
-                               placeholder="es. TRK-20240518-001" required style="font-family:monospace;letter-spacing:.08em;">
+                               placeholder="e.g. TRK-20240518-001" required style="font-family:monospace;letter-spacing:.08em;">
                     </div>
                     <?php if ( $order_id ) : ?>
-                        <p style="font-size:12px;color:#1e8449;margin-bottom:16px;">✓ Sarà associato automaticamente all'ordine <strong>#<?php echo $order_id; ?></strong>.</p>
+                        <p style="font-size:12px;color:#1e8449;margin-bottom:16px;">✓ Will be automatically associated with order <strong>#<?php echo $order_id; ?></strong>.</p>
                     <?php endif; ?>
-                    <button type="submit" class="wcotl-btn wcotl-btn-primary" style="width:100%;padding:10px;font-size:14px;">Crea e inizia ad aggiungere step →</button>
+                    <button type="submit" class="wcotl-btn wcotl-btn-primary" style="width:100%;padding:10px;font-size:14px;">Create & start adding steps</button>
                 </form>
             </div>
         </div>

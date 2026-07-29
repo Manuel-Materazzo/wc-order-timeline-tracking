@@ -23,7 +23,7 @@ class WCOTL_Admin_Presets {
             wp_verify_nonce( $_GET['_wpnonce'], 'wcotl_delete_preset' )
         ) {
             $wpdb->delete( $t, [ 'id' => absint( $_GET['preset_id'] ) ] );
-            $notice = '<div class="wcotl-notice wcotl-notice-success">Preset eliminato.</div>';
+            $notice = '<div class="wcotl-notice wcotl-notice-success">Preset deleted.</div>';
         }
 
         /* ---- EDIT (POST) ---- */
@@ -40,7 +40,7 @@ class WCOTL_Admin_Presets {
             if ( $name && $label ) {
                 $wpdb->update( $t, compact( 'name', 'label', 'note', 'icon', 'order' ), [ 'id' => $pid ],
                     [ '%s','%s','%s','%s','%d' ], [ '%d' ] );
-                // usa i nomi colonna corretti
+                // use correct column names
                 $wpdb->update( $t, [
                     'preset_name' => $name,
                     'step_label'  => $label,
@@ -48,9 +48,9 @@ class WCOTL_Admin_Presets {
                     'step_icon'   => $icon,
                     'sort_order'  => $order,
                 ], [ 'id' => $pid ] );
-                $notice = '<div class="wcotl-notice wcotl-notice-success">Preset aggiornato.</div>';
+                $notice = '<div class="wcotl-notice wcotl-notice-success">Preset updated.</div>';
             } else {
-                $notice = '<div class="wcotl-notice wcotl-notice-error">Nome e Descrizione step sono obbligatori.</div>';
+                $notice = '<div class="wcotl-notice wcotl-notice-error">Name and Step Description are required.</div>';
             }
         }
 
@@ -72,9 +72,9 @@ class WCOTL_Admin_Presets {
                     'step_icon'   => $icon,
                     'sort_order'  => $order,
                 ] );
-                $notice = '<div class="wcotl-notice wcotl-notice-success">Preset creato con successo.</div>';
+                $notice = '<div class="wcotl-notice wcotl-notice-success">Preset created successfully.</div>';
             } else {
-                $notice = '<div class="wcotl-notice wcotl-notice-error">Nome e Descrizione step sono obbligatori.</div>';
+                $notice = '<div class="wcotl-notice wcotl-notice-error">Name and Step Description are required.</div>';
             }
         }
 
@@ -90,29 +90,29 @@ class WCOTL_Admin_Presets {
         <div class="wrap wcotl-admin">
             <h1>
                 <span class="dashicons dashicons-shortcode"></span>
-                Preset Step
+                Step Presets
             </h1>
             <p style="color:#666;font-size:13px;margin-bottom:20px;">
-                I preset ti permettono di pre-compilare rapidamente i campi "Descrizione", "Nota" e "Icona"
-                quando aggiungi uno step a un tracking. Seleziona il preset dal menu a tendina nel form di aggiunta.
+                Presets allow you to quickly pre-fill "Description", "Note" and "Icon" fields
+                when adding a step to a tracking code. Select the preset from the dropdown menu in the add form.
             </p>
             <?php echo wp_kses_post( $notice ); ?>
 
             <div style="display:grid;grid-template-columns:1fr 400px;gap:24px;align-items:start;">
 
-                <!-- Lista preset -->
+                <!-- Preset List -->
                 <div>
                     <?php if ( empty( $presets ) ) : ?>
-                        <div class="wcotl-card"><p style="color:#888;">Nessun preset ancora. Creane uno dal form a destra.</p></div>
+                        <div class="wcotl-card"><p style="color:#888;">No presets yet. Create one using the form on the right.</p></div>
                     <?php else : ?>
                     <table class="wcotl-table">
                         <thead>
                             <tr>
                                 <th style="width:28px;">#</th>
-                                <th>Nome Preset</th>
-                                <th>Descrizione step</th>
-                                <th>Icona</th>
-                                <th>Azioni</th>
+                                <th>Preset Name</th>
+                                <th>Step Description</th>
+                                <th>Icon</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -135,9 +135,9 @@ class WCOTL_Admin_Presets {
                             <td style="font-size:12px;"><?php echo esc_html( $p->step_icon ); ?></td>
                             <td>
                                 <div class="wcotl-actions-row">
-                                    <a href="<?php echo esc_url( $edit_url ); ?>" class="wcotl-btn wcotl-btn-secondary wcotl-btn-sm">Modifica</a>
+                                    <a href="<?php echo esc_url( $edit_url ); ?>" class="wcotl-btn wcotl-btn-secondary wcotl-btn-sm">Edit</a>
                                     <a href="<?php echo esc_url( $del_url ); ?>" class="wcotl-btn wcotl-btn-danger wcotl-btn-sm"
-                                       onclick="return confirm('Eliminare il preset «<?php echo esc_js( $p->preset_name ); ?>»?')">Elimina</a>
+                                       onclick="return confirm('Delete preset «<?php echo esc_js( $p->preset_name ); ?>»?')">Delete</a>
                                 </div>
                             </td>
                         </tr>
@@ -147,9 +147,9 @@ class WCOTL_Admin_Presets {
                     <?php endif; ?>
                 </div>
 
-                <!-- Form crea / modifica -->
+                <!-- Create / Edit Form -->
                 <div class="wcotl-card">
-                    <h2><?php echo $edit_row ? 'Modifica Preset' : 'Nuovo Preset'; ?></h2>
+                    <h2><?php echo $edit_row ? 'Edit Preset' : 'New Preset'; ?></h2>
                     <form method="POST">
                         <?php if ( $edit_row ) : ?>
                             <?php wp_nonce_field( 'wcotl_edit_preset_' . $edit_row->id, '_wpnonce_ep' ); ?>
@@ -161,24 +161,24 @@ class WCOTL_Admin_Presets {
                         <?php endif; ?>
 
                         <div class="wcotl-form-row">
-                            <label>Nome preset <span style="color:#c0392b">*</span></label>
+                            <label>Preset Name <span style="color:#c0392b">*</span></label>
                             <input type="text" name="preset_name"
                                    value="<?php echo esc_attr( $edit_row ? $edit_row->preset_name : '' ); ?>"
-                                   placeholder="es. Partenza magazzino Milano" required>
-                            <small style="font-size:11px;color:#aaa;margin-top:2px;">Nome interno, non visibile al cliente.</small>
+                                   placeholder="e.g. Departed Milan Warehouse" required>
+                            <small style="font-size:11px;color:#aaa;margin-top:2px;">Internal name, not visible to customer.</small>
                         </div>
                         <div class="wcotl-form-row">
-                            <label>Descrizione step <span style="color:#c0392b">*</span></label>
+                            <label>Step Description <span style="color:#c0392b">*</span></label>
                             <input type="text" name="step_label"
                                    value="<?php echo esc_attr( $edit_row ? $edit_row->step_label : '' ); ?>"
-                                   placeholder="es. Merce caricata a Milano" required>
+                                   placeholder="e.g. Goods loaded in Milan" required>
                         </div>
                         <div class="wcotl-form-row">
-                            <label>Nota (opzionale)</label>
-                            <textarea name="step_note" placeholder="Dettagli aggiuntivi..."><?php echo esc_textarea( $edit_row ? $edit_row->step_note : '' ); ?></textarea>
+                            <label>Note (optional)</label>
+                            <textarea name="step_note" placeholder="Additional details..."><?php echo esc_textarea( $edit_row ? $edit_row->step_note : '' ); ?></textarea>
                         </div>
                         <div class="wcotl-form-row">
-                            <label>Icona</label>
+                            <label>Icon</label>
                             <select name="step_icon">
                                 <?php foreach ( array_keys( $icons ) as $k ) : ?>
                                     <option value="<?php echo esc_attr( $k ); ?>"
@@ -189,19 +189,19 @@ class WCOTL_Admin_Presets {
                             </select>
                         </div>
                         <div class="wcotl-form-row">
-                            <label>Ordine di visualizzazione</label>
+                            <label>Sort Order</label>
                             <input type="number" name="sort_order" min="0"
                                    value="<?php echo esc_attr( $edit_row ? $edit_row->sort_order : 0 ); ?>"
                                    style="width:100px;">
-                            <small style="font-size:11px;color:#aaa;margin-top:2px;">Valori più bassi appaiono prima nel selettore.</small>
+                            <small style="font-size:11px;color:#aaa;margin-top:2px;">Lower numbers appear first in the selector.</small>
                         </div>
 
                         <div style="display:flex;gap:8px;">
                             <button type="submit" class="wcotl-btn wcotl-btn-primary" style="flex:1;padding:10px;font-size:13px;">
-                                <?php echo $edit_row ? 'Salva modifiche →' : 'Crea Preset →'; ?>
+                                <?php echo $edit_row ? 'Save changes' : 'Create Preset'; ?>
                             </button>
                             <?php if ( $edit_row ) : ?>
-                                <a href="<?php echo admin_url('admin.php?page=wcotl-presets'); ?>" class="wcotl-btn wcotl-btn-secondary" style="padding:10px 14px;font-size:13px;">Annulla</a>
+                                <a href="<?php echo admin_url('admin.php?page=wcotl-presets'); ?>" class="wcotl-btn wcotl-btn-secondary" style="padding:10px 14px;font-size:13px;">Cancel</a>
                             <?php endif; ?>
                         </div>
                     </form>

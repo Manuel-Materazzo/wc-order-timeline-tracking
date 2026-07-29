@@ -30,7 +30,7 @@ public static function render() {
         );
 
         if ( empty( $steps ) ) {
-            $error = 'Nessun ordine trovato per il codice <strong>' . esc_html( $code ) . '</strong>. Verifica il codice e riprova.';
+            $error = 'No order found for tracking code <strong>' . esc_html( $code ) . '</strong>. Please verify the code and try again.';
         }
     }
 
@@ -475,7 +475,7 @@ public static function render() {
                             autocomplete="off"
                             spellcheck="false"
                         >
-                        <button type="submit">Search →</button>
+                        <button type="submit">Search</button>
                     </div>
                 </form>
             </div>

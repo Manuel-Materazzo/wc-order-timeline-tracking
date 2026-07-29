@@ -33,8 +33,8 @@ class WCOTL_Settings {
     public static function register_menu() {
         add_submenu_page(
             'wcotl-tracking',
-            'Impostazioni Tracking',
-            '⚙ Impostazioni',
+            'Tracking Settings',
+            '⚙ Settings',
             'manage_woocommerce',
             'wcotl-settings',
             [ __CLASS__, 'page' ]
@@ -196,19 +196,19 @@ class WCOTL_Settings {
         <div class="wrap wcotl-admin">
             <h1>
                 <span class="dashicons dashicons-admin-settings"></span>
-                Impostazioni Auto-Tracking
+                Auto-Tracking Settings
             </h1>
 
             <?php if ( $saved ) : ?>
-                <div class="wcotl-notice wcotl-notice-success">Impostazioni salvate.</div>
+                <div class="wcotl-notice wcotl-notice-success">Settings saved.</div>
             <?php endif; ?>
 
             <!-- 17TRACK configuration -->
             <div class="wcotl-card" style="max-width:620px;">
                 <h2>🛰 17TRACK API</h2>
                 <p style="font-size:13px;color:#888;margin-bottom:16px;">
-                    Ottieni la tua API key su <a href="https://api.17track.net" target="_blank">api.17track.net</a>.
-                    L'auto-tracking è abilitato per tutti i codici che hanno un numero di tracking reale associato.
+                    Get your API key at <a href="https://api.17track.net" target="_blank">api.17track.net</a>.
+                    Auto-tracking is enabled for all codes that have a real carrier tracking number associated.
                 </p>
 
                 <form method="POST" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
@@ -219,57 +219,57 @@ class WCOTL_Settings {
                         <label>
                             17TRACK API Key
                             <?php if ( $api_key ) : ?>
-                                <span style="color:#1e8449;font-size:11px;margin-left:6px;">✓ Configurata</span>
+                                <span style="color:#1e8449;font-size:11px;margin-left:6px;">✓ Configured</span>
                             <?php endif; ?>
                         </label>
                         <input type="text" name="wcotl_17track_api_key"
                                value="<?php echo esc_attr( $api_key ); ?>"
-                               placeholder="Incolla qui la tua API key"
+                               placeholder="Paste your API key here"
                                style="font-family:monospace;letter-spacing:.06em;">
                         <small style="font-size:11px;color:#aaa;margin-top:4px;">
-                            Lascia vuoto per disabilitare l'auto-tracking.
+                            Leave empty to disable auto-tracking.
                         </small>
                     </div>
 
                     <div class="wcotl-form-row">
-                        <label>Intervallo sincronizzazione (ore)</label>
+                        <label>Sync Interval (hours)</label>
                         <input type="number" name="wcotl_sync_interval"
                                value="<?php echo esc_attr( $sync_interval ); ?>"
                                min="1" max="24" step="1" style="width:120px;">
                         <?php if ( $next_sync ) : ?>
                             <small style="font-size:11px;color:#888;margin-top:4px;">
-                                Prossima sync: <?php echo esc_html( date('d/m/Y H:i', $next_sync) ); ?>
+                                Next sync: <?php echo esc_html( date('d/m/Y H:i', $next_sync) ); ?>
                             </small>
                         <?php endif; ?>
                     </div>
 
                     <div class="wcotl-form-row">
-                        <label>Giorni di inattività prima di fermare il tracking</label>
+                        <label>Inactivity days before stopping tracking</label>
                         <input type="number" name="wcotl_inactivity_days"
                                value="<?php echo esc_attr( $inactivity_days ); ?>"
                                min="1" max="365" step="1" style="width:120px;">
                         <small style="font-size:11px;color:#888;margin-top:4px;">
-                            Se non vengono ricevuti aggiornamenti per questo numero di giorni,
-                            l'auto-tracking viene interrotto e viene inviata un'email all'admin.
+                            If no updates are received for this number of days,
+                            auto-tracking is stopped and an email is sent to the admin.
                         </small>
                     </div>
 
                     <button type="submit" class="wcotl-btn wcotl-btn-primary" style="padding:10px 24px;font-size:14px;">
-                        Salva impostazioni →
+                        Save Settings
                     </button>
                 </form>
             </div>
 
             <!-- Info box -->
             <div class="wcotl-card" style="max-width:620px;background:#f0f7ff;border-color:#b8d4f8;">
-                <h2 style="color:#1a5fa8;">ℹ Come funziona l'auto-tracking</h2>
+                <h2 style="color:#1a5fa8;">ℹ How auto-tracking works</h2>
                 <ul style="font-size:13px;line-height:1.9;color:#2d4a6e;padding-left:18px;">
-                    <li>Per ogni codice tracking del plugin, puoi associare un <strong>numero tracking reale</strong> (quello del corriere, es. <code>RR123456789CN</code>).</li>
-                    <li>Il plugin interroga 17TRACK ogni <strong><?php echo $sync_interval; ?> ora/e</strong> e importa automaticamente i nuovi aggiornamenti come step nella timeline.</li>
-                    <li>Gli step manuali esistenti <strong>non vengono mai toccati</strong>: convivono con quelli automatici.</li>
-                    <li>Quando 17TRACK segnala lo stato <strong>Delivered</strong>, la data di consegna effettiva viene impostata automaticamente.</li>
-                    <li>Il polling si ferma automaticamente per spedizioni: Delivered, Expired, o <strong>inattive per <?php echo $inactivity_days; ?> giorni</strong>.</li>
-                    <li>In caso di inattività prolungata, viene inviata un'email all'indirizzo admin del sito.</li>
+                    <li>For each plugin tracking code, you can attach a <strong>real carrier tracking number</strong> (e.g. <code>RR123456789CN</code>).</li>
+                    <li>The plugin polls 17TRACK every <strong><?php echo $sync_interval; ?> hour(s)</strong> and automatically imports new updates as timeline steps.</li>
+                    <li>Existing manual steps <strong>are never modified or deleted</strong>: they coexist alongside automatic ones.</li>
+                    <li>When 17TRACK reports the <strong>Delivered</strong> status, the actual delivery date is set automatically.</li>
+                    <li>Polling automatically stops for shipments: Delivered, Expired, or <strong>inactive for <?php echo $inactivity_days; ?> days</strong>.</li>
+                    <li>In case of prolonged inactivity, an email notification is sent to the site admin.</li>
                 </ul>
             </div>
         </div>

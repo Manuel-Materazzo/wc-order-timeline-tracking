@@ -63,32 +63,32 @@ class WCOTL_Refund_Column {
         $deadline  = ( new DateTime( $delivered_at ) )->modify( '+14 days' )->format( 'd/m/Y' );
 
         if ( $days_left < 0 ) {
-            // Finestra scaduta
+            // Window expired
             printf(
                 '<span style="display:inline-flex;align-items:center;gap:4px;'
                 . 'background:#fdf2f0;color:#c0392b;border:1px solid #f5b7b1;'
                 . 'border-radius:5px;padding:3px 8px;font-size:11px;font-weight:600;'
                 . 'letter-spacing:.04em;white-space:nowrap;" title="%s">%s</span>',
-                esc_attr( sprintf( __( 'Scaduto il %s', 'wc-order-timeline' ), $deadline ) ),
-                esc_html__( 'Scaduto', 'wc-order-timeline' )
+                esc_attr( sprintf( __( 'Expired on %s', 'wc-order-timeline' ), $deadline ) ),
+                esc_html__( 'Expired', 'wc-order-timeline' )
             );
             return;
         }
 
         if ( $days_left === 0 ) {
-            // Scade oggi
+            // Expires today
             printf(
                 '<span style="display:inline-flex;align-items:center;gap:4px;'
                 . 'background:#fff3cd;color:#856404;border:1px solid #ffc107;'
                 . 'border-radius:5px;padding:3px 8px;font-size:11px;font-weight:600;'
                 . 'letter-spacing:.04em;white-space:nowrap;" title="%s">%s</span>',
-                esc_attr( sprintf( __( 'Scade oggi (%s)', 'wc-order-timeline' ), $deadline ) ),
-                esc_html__( 'Scade oggi', 'wc-order-timeline' )
+                esc_attr( sprintf( __( 'Expires today (%s)', 'wc-order-timeline' ), $deadline ) ),
+                esc_html__( 'Expires today', 'wc-order-timeline' )
             );
             return;
         }
 
-        // Colore: verde se > 7 gg, arancione se 1–7 gg
+        // Color: green if > 7 days, orange if 1–7 days
         if ( $days_left > 7 ) {
             $bg     = '#eafaf1';
             $color  = '#1e8449';
@@ -109,9 +109,9 @@ class WCOTL_Refund_Column {
             esc_attr( $bg ),
             esc_attr( $color ),
             esc_attr( $border ),
-            esc_attr( sprintf( __( 'Scade il %s', 'wc-order-timeline' ), $deadline ) ),
+            esc_attr( sprintf( __( 'Expires on %s', 'wc-order-timeline' ), $deadline ) ),
             esc_html( sprintf(
-                _n( '%d giorno', '%d giorni', $days_left, 'wc-order-timeline' ),
+                _n( '%d day', '%d days', $days_left, 'wc-order-timeline' ),
                 $days_left
             ) )
         );
