@@ -200,13 +200,13 @@ class WCOTL_Settings {
             </h1>
 
             <?php if ( $saved ) : ?>
-                <div class="wcotl-notice wcotl-notice-success">Settings saved.</div>
+                <div class="notice notice-success is-dismissible"><p>Settings saved.</p></div>
             <?php endif; ?>
 
             <!-- 17TRACK configuration -->
-            <div class="wcotl-card" style="max-width:620px;">
-                <h2>🛰 17TRACK API</h2>
-                <p style="font-size:13px;color:#888;margin-bottom:16px;">
+            <div class="card" style="max-width:620px;">
+                <h2><span class="dashicons dashicons-share-alt"></span> 17TRACK API</h2>
+                <p style="font-size:13px;color:#646970;margin-bottom:16px;">
                     Get your API key at <a href="https://api.17track.net" target="_blank">api.17track.net</a>.
                     Auto-tracking is enabled for all codes that have a real carrier tracking number associated.
                 </p>
@@ -219,14 +219,14 @@ class WCOTL_Settings {
                         <label>
                             17TRACK API Key
                             <?php if ( $api_key ) : ?>
-                                <span style="color:#1e8449;font-size:11px;margin-left:6px;">✓ Configured</span>
+                                <span style="color:#008a20;font-size:11px;margin-left:6px;">✓ Configured</span>
                             <?php endif; ?>
                         </label>
                         <input type="text" name="wcotl_17track_api_key"
                                value="<?php echo esc_attr( $api_key ); ?>"
                                placeholder="Paste your API key here"
-                               style="font-family:monospace;letter-spacing:.06em;">
-                        <small style="font-size:11px;color:#aaa;margin-top:4px;">
+                               style="font-family:monospace;">
+                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
                             Leave empty to disable auto-tracking.
                         </small>
                     </div>
@@ -237,7 +237,7 @@ class WCOTL_Settings {
                                value="<?php echo esc_attr( $sync_interval ); ?>"
                                min="1" max="24" step="1" style="width:120px;">
                         <?php if ( $next_sync ) : ?>
-                            <small style="font-size:11px;color:#888;margin-top:4px;">
+                            <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
                                 Next sync: <?php echo esc_html( date('d/m/Y H:i', $next_sync) ); ?>
                             </small>
                         <?php endif; ?>
@@ -248,20 +248,20 @@ class WCOTL_Settings {
                         <input type="number" name="wcotl_inactivity_days"
                                value="<?php echo esc_attr( $inactivity_days ); ?>"
                                min="1" max="365" step="1" style="width:120px;">
-                        <small style="font-size:11px;color:#888;margin-top:4px;">
+                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
                             If no updates are received for this number of days,
                             auto-tracking is stopped and an email is sent to the admin.
                         </small>
                     </div>
 
-                    <button type="submit" class="wcotl-btn wcotl-btn-primary" style="padding:10px 24px;font-size:14px;">
+                    <button type="submit" class="button button-primary">
                         Save Settings
                     </button>
                 </form>
             </div>
 
             <!-- Info box -->
-            <div class="wcotl-card" style="max-width:620px;background:#f0f7ff;border-color:#b8d4f8;">
+            <div class="card" style="max-width:620px;background:#f0f7ff;border-color:#b8d4f8;">
                 <h2 style="color:#1a5fa8;">ℹ How auto-tracking works</h2>
                 <ul style="font-size:13px;line-height:1.9;color:#2d4a6e;padding-left:18px;">
                     <li>For each plugin tracking code, you can attach a <strong>real carrier tracking number</strong> (e.g. <code>RR123456789CN</code>).</li>

@@ -23,7 +23,7 @@ class WCOTL_Admin_Presets {
             wp_verify_nonce( $_GET['_wpnonce'], 'wcotl_delete_preset' )
         ) {
             $wpdb->delete( $t, [ 'id' => absint( $_GET['preset_id'] ) ] );
-            $notice = '<div class="wcotl-notice wcotl-notice-success">Preset deleted.</div>';
+            $notice = '<div class="notice notice-success is-dismissible"><p>Preset deleted.</p></div>';
         }
 
         /* ---- EDIT (POST) ---- */
@@ -48,9 +48,9 @@ class WCOTL_Admin_Presets {
                     'step_icon'   => $icon,
                     'sort_order'  => $order,
                 ], [ 'id' => $pid ] );
-                $notice = '<div class="wcotl-notice wcotl-notice-success">Preset updated.</div>';
+                $notice = '<div class="notice notice-success is-dismissible"><p>Preset updated.</p></div>';
             } else {
-                $notice = '<div class="wcotl-notice wcotl-notice-error">Name and Step Description are required.</div>';
+                $notice = '<div class="notice notice-error is-dismissible"><p>Name and Step Description are required.</p></div>';
             }
         }
 
@@ -72,9 +72,9 @@ class WCOTL_Admin_Presets {
                     'step_icon'   => $icon,
                     'sort_order'  => $order,
                 ] );
-                $notice = '<div class="wcotl-notice wcotl-notice-success">Preset created successfully.</div>';
+                $notice = '<div class="notice notice-success is-dismissible"><p>Preset created successfully.</p></div>';
             } else {
-                $notice = '<div class="wcotl-notice wcotl-notice-error">Name and Step Description are required.</div>';
+                $notice = '<div class="notice notice-error is-dismissible"><p>Name and Step Description are required.</p></div>';
             }
         }
 
@@ -87,7 +87,7 @@ class WCOTL_Admin_Presets {
             }
         }
         ?>
-        <div class="wrap wcotl-admin">
+        <div class="wrap">
             <h1>
                 <span class="dashicons dashicons-shortcode"></span>
                 Step Presets
@@ -98,14 +98,14 @@ class WCOTL_Admin_Presets {
             </p>
             <?php echo wp_kses_post( $notice ); ?>
 
-            <div style="display:grid;grid-template-columns:1fr 400px;gap:24px;align-items:start;">
+            <div style="display:grid;grid-template-columns:1fr 320px;gap:24px;align-items:start;">
 
                 <!-- Preset List -->
                 <div>
                     <?php if ( empty( $presets ) ) : ?>
-                        <div class="wcotl-card"><p style="color:#888;">No presets yet. Create one using the form on the right.</p></div>
+                        <div class="card"><p style="color:#646970;">No presets yet. Create one using the form on the right.</p></div>
                     <?php else : ?>
-                    <table class="wcotl-table">
+                    <table class="wp-list-table widefat fixed striped">
                         <thead>
                             <tr>
                                 <th style="width:28px;">#</th>
@@ -135,8 +135,8 @@ class WCOTL_Admin_Presets {
                             <td style="font-size:12px;"><?php echo esc_html( $p->step_icon ); ?></td>
                             <td>
                                 <div class="wcotl-actions-row">
-                                    <a href="<?php echo esc_url( $edit_url ); ?>" class="wcotl-btn wcotl-btn-secondary wcotl-btn-sm">Edit</a>
-                                    <a href="<?php echo esc_url( $del_url ); ?>" class="wcotl-btn wcotl-btn-danger wcotl-btn-sm"
+                                    <a href="<?php echo esc_url( $edit_url ); ?>" class="button button-secondary button-small">Edit</a>
+                                    <a href="<?php echo esc_url( $del_url ); ?>" class="button button-link-delete button-small"
                                        onclick="return confirm('Delete preset «<?php echo esc_js( $p->preset_name ); ?>»?')">Delete</a>
                                 </div>
                             </td>
@@ -148,7 +148,7 @@ class WCOTL_Admin_Presets {
                 </div>
 
                 <!-- Create / Edit Form -->
-                <div class="wcotl-card">
+                <div class="card" style="max-width:none;">
                     <h2><?php echo $edit_row ? 'Edit Preset' : 'New Preset'; ?></h2>
                     <form method="POST">
                         <?php if ( $edit_row ) : ?>
@@ -161,14 +161,14 @@ class WCOTL_Admin_Presets {
                         <?php endif; ?>
 
                         <div class="wcotl-form-row">
-                            <label>Preset Name <span style="color:#c0392b">*</span></label>
+                            <label>Preset Name <span style="color:#d63638">*</span></label>
                             <input type="text" name="preset_name"
                                    value="<?php echo esc_attr( $edit_row ? $edit_row->preset_name : '' ); ?>"
                                    placeholder="e.g. Departed Milan Warehouse" required>
-                            <small style="font-size:11px;color:#aaa;margin-top:2px;">Internal name, not visible to customer.</small>
+                            <small style="font-size:11px;color:#646970;display:block;margin-top:2px;">Internal name, not visible to customer.</small>
                         </div>
                         <div class="wcotl-form-row">
-                            <label>Step Description <span style="color:#c0392b">*</span></label>
+                            <label>Step Description <span style="color:#d63638">*</span></label>
                             <input type="text" name="step_label"
                                    value="<?php echo esc_attr( $edit_row ? $edit_row->step_label : '' ); ?>"
                                    placeholder="e.g. Goods loaded in Milan" required>
@@ -193,15 +193,15 @@ class WCOTL_Admin_Presets {
                             <input type="number" name="sort_order" min="0"
                                    value="<?php echo esc_attr( $edit_row ? $edit_row->sort_order : 0 ); ?>"
                                    style="width:100px;">
-                            <small style="font-size:11px;color:#aaa;margin-top:2px;">Lower numbers appear first in the selector.</small>
+                            <small style="font-size:11px;color:#646970;display:block;margin-top:2px;">Lower numbers appear first in the selector.</small>
                         </div>
 
                         <div style="display:flex;gap:8px;">
-                            <button type="submit" class="wcotl-btn wcotl-btn-primary" style="flex:1;padding:10px;font-size:13px;">
+                            <button type="submit" class="button button-primary" style="flex:1;">
                                 <?php echo $edit_row ? 'Save changes' : 'Create Preset'; ?>
                             </button>
                             <?php if ( $edit_row ) : ?>
-                                <a href="<?php echo admin_url('admin.php?page=wcotl-presets'); ?>" class="wcotl-btn wcotl-btn-secondary" style="padding:10px 14px;font-size:13px;">Cancel</a>
+                                <a href="<?php echo admin_url('admin.php?page=wcotl-presets'); ?>" class="button button-secondary">Cancel</a>
                             <?php endif; ?>
                         </div>
                     </form>
