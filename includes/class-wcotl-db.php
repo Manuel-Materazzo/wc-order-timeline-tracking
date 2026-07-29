@@ -26,6 +26,7 @@ class WCOTL_DB {
             step_icon        VARCHAR(64)                  DEFAULT 'truck',
             step_voided      TINYINT(1)          NOT NULL DEFAULT 0,
             step_void_reason TEXT                         DEFAULT NULL,
+            step_source      VARCHAR(16)         NOT NULL DEFAULT 'manual',
             created_at       DATETIME            NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY  (id),
             KEY tracking_code (tracking_code),
@@ -58,11 +59,11 @@ class WCOTL_DB {
         dbDelta( $sql_meta );
         dbDelta( $sql_presets );
 
-        update_option( 'wcotl_db_version', '1.3' );
+        update_option( 'wcotl_db_version', '1.4' );
     }
 
     public static function maybe_upgrade() {
-        if ( get_option( 'wcotl_db_version' ) !== '1.3' ) {
+        if ( get_option( 'wcotl_db_version' ) !== '1.4' ) {
             WCOTL_DB::activate();
             // Migrazione: aggiunge le colonne se non esistono già
             global $wpdb;
@@ -73,6 +74,9 @@ class WCOTL_DB {
             }
             if ( ! in_array( 'step_void_reason', $cols, true ) ) {
                 $wpdb->query( "ALTER TABLE {$table} ADD COLUMN step_void_reason TEXT DEFAULT NULL" );
+            }
+            if ( ! in_array( 'step_source', $cols, true ) ) {
+                $wpdb->query( "ALTER TABLE {$table} ADD COLUMN step_source VARCHAR(16) NOT NULL DEFAULT 'manual'" );
             }
         }
     }

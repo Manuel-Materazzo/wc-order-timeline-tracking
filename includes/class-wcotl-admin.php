@@ -9,6 +9,7 @@ class WCOTL_Admin {
     public static function init() {
         add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
         add_action( 'admin_head', array( __CLASS__, 'admin_styles' ) );
+        add_action( 'admin_head', array( __CLASS__, 'admin_nonce_script' ) );
     }
 
     public static function register_menu() {
@@ -113,7 +114,29 @@ class WCOTL_Admin {
         .tooltip:hover .tooltiptext {
             visibility: visible;
         }
+        .wcotl-autotrack-card { background: linear-gradient(135deg,#f0f7ff 0%,#e8f4fd 100%); border:1.5px solid #b8d4f8; }
+        .wcotl-autotrack-card h2 { color:#1a5fa8; }
+        .wcotl-source-badge { display:inline-block; font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; padding:2px 7px; border-radius:4px; margin-left:6px; vertical-align:middle; }
+        .wcotl-source-auto   { background:#e8f4fd; color:#1a5fa8; border:1px solid #b8d4f8; }
+        .wcotl-source-manual { background:#f0ede8; color:#6b6158; border:1px solid #e2ddd8; }
+        .wcotl-sync-status { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; padding:4px 10px; border-radius:6px; }
+        .wcotl-sync-active  { background:#eafaf1; color:#1e8449; border:1px solid #a9dfbf; }
+        .wcotl-sync-stopped { background:#fdf2f0; color:#c0392b; border:1px solid #f5b7b1; }
+        .wcotl-sync-pending { background:#fff8e8; color:#9a6e1a; border:1px solid #f0c060; }
         </style>
+        <?php
+    }
+
+    public static function admin_nonce_script() {
+        $screen = get_current_screen();
+        if ( ! $screen || strpos( $screen->id, 'wcotl' ) === false ) return;
+        ?>
+        <script>
+        var WCOTL_AJAX = {
+            url:   '<?php echo esc_js( admin_url('admin-ajax.php') ); ?>',
+            nonce: '<?php echo esc_js( wp_create_nonce('wcotl_admin_nonce') ); ?>'
+        };
+        </script>
         <?php
     }
 
@@ -371,6 +394,16 @@ class WCOTL_Admin {
         $estimated_delivery = WCOTL_DB::get_meta( $code, 'estimated_delivery' );
         $delivered_at       = WCOTL_DB::get_meta( $code, 'delivered_at' );
 
+        // Auto-tracking meta
+        $at_real_number  = WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_REAL_NUMBER );
+        $at_carrier      = (int) ( WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_CARRIER_CODE ) ?: 0 );
+        $at_registered   = WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_REGISTERED );
+        $at_last_status  = WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_LAST_STATUS );
+        $at_last_event   = WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_LAST_EVENT_DATE );
+        $at_stopped      = WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_SYNC_STOPPED );
+        $at_stop_reason  = WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_STOP_REASON );
+        $provider_active = (bool) get_option( 'wcotl_17track_api_key', '' );
+
         echo wp_kses_post( $notice );
         ?>
         <p>
@@ -475,6 +508,189 @@ class WCOTL_Admin {
             </form>
         </div>
 
+        <!-- Auto-tracking 17TRACK -->
+        <div class="wcotl-card wcotl-autotrack-card" style="margin-bottom:24px;">
+            <h2>🛰 Auto-Tracking (17TRACK)</h2>
+            <?php if ( ! $provider_active ) : ?>
+                <p style="font-size:13px;color:#888;">
+                    Auto-tracking non attivo. Configura la tua API key in
+                    <a href="<?php echo esc_url( admin_url('admin.php?page=wcotl-settings') ); ?>">Impostazioni</a>.
+                </p>
+            <?php else : ?>
+
+            <!-- Status badge -->
+            <div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                <?php if ( $at_real_number ) : ?>
+                    <?php if ( $at_stopped ) : ?>
+                        <span class="wcotl-sync-status wcotl-sync-stopped">⏹ Sync fermato</span>
+                        <?php if ( $at_stop_reason ) : ?>
+                            <span style="font-size:12px;color:#888;"><?php echo esc_html($at_stop_reason); ?></span>
+                        <?php endif; ?>
+                        <button class="wcotl-btn wcotl-btn-sm" style="background:#eafaf1;color:#1e8449;border:1px solid #a9dfbf;"
+                                onclick="wcotlResumeSync()">↺ Riprendi sync</button>
+                    <?php elseif ( $at_registered ) : ?>
+                        <span class="wcotl-sync-status wcotl-sync-active">✓ Sync attivo</span>
+                        <?php if ( $at_last_status ) : ?>
+                            <span style="font-size:12px;color:#888;">Stato: <strong><?php echo esc_html($at_last_status); ?></strong></span>
+                        <?php endif; ?>
+                        <?php if ( $at_last_event ) : ?>
+                            <span style="font-size:12px;color:#888;">Ultimo evento: <?php echo esc_html((new DateTime($at_last_event))->format('d/m/Y H:i')); ?></span>
+                        <?php endif; ?>
+                    <?php else : ?>
+                        <span class="wcotl-sync-status wcotl-sync-pending">⏳ In attesa di prima sync</span>
+                    <?php endif; ?>
+
+                    <?php if ( $at_real_number && ! $at_stopped ) : ?>
+                        <button class="wcotl-btn wcotl-btn-secondary wcotl-btn-sm" id="wcotl-sync-now-btn"
+                                onclick="wcotlSyncNow()">
+                            ↻ Sync ora
+                        </button>
+                    <?php endif; ?>
+                <?php else : ?>
+                    <span class="wcotl-sync-status wcotl-sync-pending">— Nessun numero tracking reale impostato</span>
+                <?php endif; ?>
+            </div>
+
+            <!-- Real tracking number form -->
+            <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
+                <div class="wcotl-form-row" style="margin-bottom:0;width:260px;">
+                    <label>Numero tracking corriere
+                        <span class="dashicons dashicons-info tooltip">
+                            <span class="tooltiptext">Il codice tracking reale del corriere (es. RR123456789CN). Questo viene usato per interrogare 17TRACK.</span>
+                        </span>
+                    </label>
+                    <input type="text" id="wcotl-real-number"
+                           value="<?php echo esc_attr($at_real_number ?: ''); ?>"
+                           placeholder="es. RR123456789CN"
+                           style="font-family:monospace;letter-spacing:.06em;">
+                </div>
+                <div class="wcotl-form-row" style="margin-bottom:0;width:260px;">
+                    <label>Corriere
+                        <span class="dashicons dashicons-info tooltip">
+                            <span class="tooltiptext">Seleziona il corriere o usa "Auto-detect" per suggerimenti da 17TRACK. Se lasci 0 / Auto, 17TRACK prova a rilevarlo automaticamente.</span>
+                        </span>
+                    </label>
+                    <select id="wcotl-carrier-select" style="font-size:13px;">
+                        <option value="0">— Auto-detect —</option>
+                        <?php if ( $at_carrier ) : ?>
+                            <option value="<?php echo $at_carrier; ?>" selected>Corriere #<?php echo $at_carrier; ?> (salvato)</option>
+                        <?php endif; ?>
+                    </select>
+                </div>
+                <div style="display:flex;gap:8px;flex-direction:column;">
+                    <button class="wcotl-btn wcotl-btn-secondary wcotl-btn-sm" style="white-space:nowrap;"
+                            onclick="wcotlDetectCarriers()">🔍 Detect carrier</button>
+                    <button class="wcotl-btn wcotl-btn-primary wcotl-btn-sm" style="white-space:nowrap;"
+                            onclick="wcotlSaveAutoTracking()">💾 Salva</button>
+                </div>
+            </div>
+            <div id="wcotl-at-message" style="font-size:12px;margin-top:4px;"></div>
+
+            <script>
+            var WCOTL_TRACKING_CODE = '<?php echo esc_js($code); ?>';
+
+            function wcotlDetectCarriers() {
+                var num = document.getElementById('wcotl-real-number').value.trim();
+                if (!num) { alert('Inserisci prima il numero tracking corriere.'); return; }
+                var msg = document.getElementById('wcotl-at-message');
+                msg.textContent = '⏳ Rilevamento in corso...';
+                fetch(WCOTL_AJAX.url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: new URLSearchParams({
+                        action: 'wcotl_detect_carriers',
+                        nonce:  WCOTL_AJAX.nonce,
+                        number: num
+                    })
+                }).then(r => r.json()).then(res => {
+                    if (!res.success) { msg.textContent = '❌ ' + (res.data || 'Errore'); return; }
+                    var carriers = res.data;
+                    var sel = document.getElementById('wcotl-carrier-select');
+                    sel.innerHTML = '<option value="0">— Auto-detect —</option>';
+                    if (Object.keys(carriers).length === 0) {
+                        msg.textContent = '⚠ Nessun corriere rilevato. Seleziona manualmente.';
+                    } else {
+                        for (var code in carriers) {
+                            var opt = document.createElement('option');
+                            opt.value = code;
+                            opt.textContent = carriers[code] + ' (' + code + ')';
+                            sel.appendChild(opt);
+                        }
+                        sel.selectedIndex = 1;
+                        msg.textContent = '✓ ' + Object.keys(carriers).length + ' corriere/i trovato/i. Seleziona e salva.';
+                        msg.style.color = '#1e8449';
+                    }
+                }).catch(e => { msg.textContent = '❌ Errore di rete.'; });
+            }
+
+            function wcotlSaveAutoTracking() {
+                var num     = document.getElementById('wcotl-real-number').value.trim();
+                var carrier = document.getElementById('wcotl-carrier-select').value;
+                var msg     = document.getElementById('wcotl-at-message');
+                msg.textContent = '⏳ Salvataggio...';
+                fetch(WCOTL_AJAX.url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: new URLSearchParams({
+                        action:        'wcotl_save_auto_tracking',
+                        nonce:         WCOTL_AJAX.nonce,
+                        tracking_code: WCOTL_TRACKING_CODE,
+                        real_number:   num,
+                        carrier_code:  carrier
+                    })
+                }).then(r => r.json()).then(res => {
+                    if (!res.success) { msg.style.color='#c0392b'; msg.textContent = '❌ ' + (res.data || 'Errore'); return; }
+                    msg.style.color = '#1e8449';
+                    msg.textContent = '✓ Salvato! La prima sync avverrà al prossimo cron (o usa "Sync ora").';
+                    setTimeout(() => location.reload(), 1800);
+                }).catch(e => { msg.textContent = '❌ Errore di rete.'; });
+            }
+
+            function wcotlSyncNow() {
+                var btn = document.getElementById('wcotl-sync-now-btn');
+                if (btn) btn.disabled = true;
+                var msg = document.getElementById('wcotl-at-message');
+                msg.style.color = '#888';
+                msg.textContent = '⏳ Sync in corso...';
+                fetch(WCOTL_AJAX.url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: new URLSearchParams({
+                        action:        'wcotl_sync_now',
+                        nonce:         WCOTL_AJAX.nonce,
+                        tracking_code: WCOTL_TRACKING_CODE
+                    })
+                }).then(r => r.json()).then(res => {
+                    if (!res.success) { msg.style.color='#c0392b'; msg.textContent = '❌ ' + (res.data || 'Errore'); if(btn)btn.disabled=false; return; }
+                    msg.style.color = '#1e8449';
+                    msg.textContent = '✓ Sync completata! Stato: ' + (res.data.status || '?');
+                    setTimeout(() => location.reload(), 1800);
+                }).catch(e => { msg.textContent = '❌ Errore di rete.'; if(btn)btn.disabled=false; });
+            }
+
+            function wcotlResumeSync() {
+                var msg = document.getElementById('wcotl-at-message');
+                msg.textContent = '⏳ Riattivazione...';
+                fetch(WCOTL_AJAX.url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: new URLSearchParams({
+                        action:        'wcotl_resume_sync',
+                        nonce:         WCOTL_AJAX.nonce,
+                        tracking_code: WCOTL_TRACKING_CODE
+                    })
+                }).then(r => r.json()).then(res => {
+                    if (!res.success) { msg.style.color='#c0392b'; msg.textContent = '❌ ' + (res.data || 'Errore'); return; }
+                    msg.style.color = '#1e8449';
+                    msg.textContent = '✓ Sync riattivata!';
+                    setTimeout(() => location.reload(), 1000);
+                }).catch(e => { msg.textContent = '❌ Errore di rete.'; });
+            }
+            </script>
+
+            <?php endif; // provider_active ?>
+        </div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;">
 
             <!-- Lista step esistenti -->
@@ -507,6 +723,10 @@ class WCOTL_Admin {
                         <div class="wcotl-step-row" id="wcotl-view-<?php echo $s->id; ?>" style="display:flex;gap:12px;align-items:flex-start;">
                             <div class="wcotl-step-meta" style="flex:1;">
                                 <strong style="<?php echo $is_voided ? 'text-decoration:line-through;color:#a09a94;' : ''; ?>"><?php echo esc_html($s->step_label); ?></strong>
+                                <?php $src = isset($s->step_source) ? $s->step_source : 'manual'; ?>
+                                <span class="wcotl-source-badge <?php echo $src === 'auto' ? 'wcotl-source-auto' : 'wcotl-source-manual'; ?>">
+                                    <?php echo $src === 'auto' ? '🛰 auto' : '✍ manuale'; ?>
+                                </span>
                                 <small><?php echo esc_html($dt->format('d/m/Y H:i')); ?> &nbsp;·&nbsp; <?php echo esc_html($s->step_icon); ?></small>
                                 <?php if ($s->step_note) : ?>
                                     <p style="font-size:12px;color:#888;margin-top:4px;font-style:italic;"><?php echo esc_html($s->step_note); ?></p>
