@@ -533,22 +533,20 @@ class WCOTL_Admin {
                             onclick="wcotlSaveAutoTracking()">💾 Save</button>
                 </div>
             </div>
-            <!-- Manual carrier code input (shown when auto-detect finds nothing) -->
-            <div id="wcotl-manual-carrier-row" style="display:none;margin-top:8px;padding:10px 12px;background:#fff8e5;border:1px solid #f0c060;border-radius:4px;">
-                <p style="font-size:12px;margin:0 0 8px;color:#7a5500;">
-                    ⚠ No carrier detected automatically. Enter the 17TRACK carrier code manually.
-                    <a href="https://www.17track.net/en/carriers" target="_blank" style="font-size:11px;">Browse carrier codes ↗</a>
-                </p>
-                <div style="display:flex;gap:8px;align-items:center;">
-                    <input type="number" id="wcotl-manual-carrier-code"
-                           placeholder="e.g. 3011 for China Post"
-                           style="width:220px;font-family:monospace;"
-                           min="1">
-                    <button class="button button-secondary button-small"
-                            onclick="wcotlUseManualCarrier()">Use this code</button>
-                    <button class="button button-small"
-                            onclick="wcotlHideManualCarrier()">✕</button>
+            <!-- Carrier search panel (shown when auto-detect finds nothing) -->
+            <div id="wcotl-manual-carrier-row" style="display:none;margin-top:8px;padding:12px 14px;background:#fff8e5;border:1px solid #f0c060;border-radius:4px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                    <p style="font-size:12px;margin:0;color:#7a5500;font-weight:600;">⚠ No carrier detected — search manually:</p>
+                    <button class="button button-small" onclick="wcotlHideManualCarrier()" style="padding:0 6px;min-height:24px;line-height:22px;">✕</button>
                 </div>
+                <input type="text" id="wcotl-carrier-search"
+                       placeholder="Type carrier name or code (e.g. UPS, 100002)…"
+                       style="width:100%;box-sizing:border-box;margin-bottom:6px;"
+                       autocomplete="off">
+                <div id="wcotl-carrier-results"
+                     style="max-height:200px;overflow-y:auto;border:1px solid #dcdcde;border-radius:3px;background:#fff;display:none;">
+                </div>
+                <p id="wcotl-carrier-search-status" style="font-size:11px;color:#888;margin:4px 0 0;"></p>
             </div>
             <div id="wcotl-at-message" style="font-size:12px;margin-top:4px;"></div>
 
@@ -595,32 +593,119 @@ class WCOTL_Admin {
                 }).catch(e => { msg.style.color = '#c0392b'; msg.textContent = '❌ Network error.'; });
             }
 
-            function wcotlUseManualCarrier() {
-                var code = document.getElementById('wcotl-manual-carrier-code').value.trim();
-                if (!code || isNaN(parseInt(code, 10))) {
-                    alert('Please enter a valid numeric carrier code.'); return;
+            // ---- Carrier search (manual fallback) ----
+            var _wcotlCarrierList  = null; // cached full list [{key, name, country}]
+            var _wcotlCarrierFetch = null; // in-flight promise
+
+            function wcotlLoadCarrierList() {
+                if (_wcotlCarrierList) return Promise.resolve(_wcotlCarrierList);
+                if (_wcotlCarrierFetch) return _wcotlCarrierFetch;
+                var status = document.getElementById('wcotl-carrier-search-status');
+                status.textContent = '⏳ Loading carrier list…';
+                _wcotlCarrierFetch = fetch('https://res.17track.net/asset/carrier/info/apicarrier.all.json', { cache: 'force-cache' })
+                    .then(r => r.json())
+                    .then(data => {
+                        // Normalise raw fields: _name → name, _country_iso → country
+                        _wcotlCarrierList = data.map(function(c) {
+                            return { key: c.key, name: c._name || '', country: c._country_iso || '' };
+                        });
+                        status.textContent = _wcotlCarrierList.length + ' carriers loaded. Type to search.';
+                        return _wcotlCarrierList;
+                    })
+                    .catch(() => {
+                        status.textContent = '❌ Could not load carrier list.';
+                        return [];
+                    });
+                return _wcotlCarrierFetch;
+            }
+
+            function wcotlRenderCarrierResults(list) {
+                var box = document.getElementById('wcotl-carrier-results');
+                box.innerHTML = '';
+                if (list.length === 0) {
+                    box.style.display = 'none';
+                    return;
                 }
+                list.slice(0, 60).forEach(function(c) {
+                    var row = document.createElement('div');
+                    row.style.cssText = 'padding:6px 10px;cursor:pointer;border-bottom:1px solid #f0f0f1;font-size:12px;display:flex;justify-content:space-between;align-items:center;';
+                    row.innerHTML = '<span><strong>' + c.name + '</strong> <span style="color:#888;">– ' + (c.country || '') + '</span></span>'
+                                  + '<code style="font-size:11px;background:#f0f0f1;padding:1px 5px;border-radius:3px;">#' + c.key + '</code>';
+                    row.addEventListener('mouseover', function() { this.style.background = '#f0f7ff'; });
+                    row.addEventListener('mouseout',  function() { this.style.background = ''; });
+                    row.addEventListener('mousedown', function(e) {
+                        e.preventDefault(); // don't blur the search input before click fires
+                        wcotlSelectCarrierFromSearch(c.key, c.name);
+                    });
+                    box.appendChild(row);
+                });
+                if (list.length > 60) {
+                    var more = document.createElement('div');
+                    more.style.cssText = 'padding:5px 10px;font-size:11px;color:#888;text-align:center;';
+                    more.textContent = '+ ' + (list.length - 60) + ' more – keep typing to narrow down.';
+                    box.appendChild(more);
+                }
+                box.style.display = 'block';
+            }
+
+            function wcotlSelectCarrierFromSearch(key, name) {
                 var sel = document.getElementById('wcotl-carrier-select');
-                // Remove any previous manual entry
+                // Remove any previous manual option
                 var existing = sel.querySelector('option[data-manual]');
                 if (existing) existing.remove();
                 var opt = document.createElement('option');
-                opt.value = code;
-                opt.textContent = 'Carrier #' + code + ' (manual)';
+                opt.value    = key;
+                opt.textContent = name + ' (#' + key + ')';
                 opt.setAttribute('data-manual', '1');
                 opt.selected = true;
                 sel.appendChild(opt);
+                // Close the panel
                 document.getElementById('wcotl-manual-carrier-row').style.display = 'none';
+                document.getElementById('wcotl-carrier-results').style.display = 'none';
+                document.getElementById('wcotl-carrier-search').value = '';
                 var msg = document.getElementById('wcotl-at-message');
                 msg.style.color = '#1a5fa8';
-                msg.textContent = '✓ Carrier code #' + code + ' set. Click Save to confirm.';
+                msg.textContent = '✓ ' + name + ' (#' + key + ') selected. Click Save to confirm.';
             }
 
             function wcotlHideManualCarrier() {
                 document.getElementById('wcotl-manual-carrier-row').style.display = 'none';
-                var msg = document.getElementById('wcotl-at-message');
-                msg.textContent = '';
+                document.getElementById('wcotl-carrier-results').style.display = 'none';
+                document.getElementById('wcotl-carrier-search').value = '';
+                document.getElementById('wcotl-at-message').textContent = '';
             }
+
+            // Wire up the search input once the DOM is ready
+            document.addEventListener('DOMContentLoaded', function() {
+                var searchInput = document.getElementById('wcotl-carrier-search');
+                var resultsBox  = document.getElementById('wcotl-carrier-results');
+                var debounce;
+                searchInput.addEventListener('input', function() {
+                    var q = this.value.trim().toLowerCase();
+                    clearTimeout(debounce);
+                    if (!q) { resultsBox.style.display = 'none'; return; }
+                    debounce = setTimeout(function() {
+                        wcotlLoadCarrierList().then(function(list) {
+                            var filtered = list.filter(function(c) {
+                                return c.name.toLowerCase().indexOf(q) !== -1
+                                    || String(c.key).indexOf(q) !== -1
+                                    || (c.country && c.country.toLowerCase().indexOf(q) !== -1);
+                            });
+                            wcotlRenderCarrierResults(filtered);
+                            document.getElementById('wcotl-carrier-search-status').textContent =
+                                filtered.length === 0 ? 'No carriers found.' : filtered.length + ' result(s).';
+                        });
+                    }, 180);
+                });
+                searchInput.addEventListener('focus', function() {
+                    // Pre-load carrier list on first focus so it's ready instantly
+                    wcotlLoadCarrierList();
+                });
+                searchInput.addEventListener('blur', function() {
+                    // Small delay so mousedown on a result fires first
+                    setTimeout(function() { resultsBox.style.display = 'none'; }, 200);
+                });
+            });
 
             function wcotlSaveAutoTracking() {
                 var num     = document.getElementById('wcotl-real-number').value.trim();
