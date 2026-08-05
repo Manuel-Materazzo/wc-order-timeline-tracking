@@ -516,7 +516,7 @@ class WCOTL_Admin {
                 <div class="wcotl-form-row" style="margin-bottom:0;width:260px;">
                     <label>Carrier
                         <span class="dashicons dashicons-info tooltip">
-                            <span class="tooltiptext">Select carrier or use "Auto-detect" for suggestions from 17TRACK. If set to Auto, 17TRACK attempts auto-detection.</span>
+                            <span class="tooltiptext">Click "Detect carrier" to let 17TRACK suggest carriers automatically. If none are detected, enter the carrier code manually (find codes at <a href="https://www.17track.net/en/carriers" target="_blank">17track.net/carrier-codes</a>).</span>
                         </span>
                     </label>
                     <select id="wcotl-carrier-select">
@@ -533,6 +533,23 @@ class WCOTL_Admin {
                             onclick="wcotlSaveAutoTracking()">💾 Save</button>
                 </div>
             </div>
+            <!-- Manual carrier code input (shown when auto-detect finds nothing) -->
+            <div id="wcotl-manual-carrier-row" style="display:none;margin-top:8px;padding:10px 12px;background:#fff8e5;border:1px solid #f0c060;border-radius:4px;">
+                <p style="font-size:12px;margin:0 0 8px;color:#7a5500;">
+                    ⚠ No carrier detected automatically. Enter the 17TRACK carrier code manually.
+                    <a href="https://www.17track.net/en/carriers" target="_blank" style="font-size:11px;">Browse carrier codes ↗</a>
+                </p>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="number" id="wcotl-manual-carrier-code"
+                           placeholder="e.g. 3011 for China Post"
+                           style="width:220px;font-family:monospace;"
+                           min="1">
+                    <button class="button button-secondary button-small"
+                            onclick="wcotlUseManualCarrier()">Use this code</button>
+                    <button class="button button-small"
+                            onclick="wcotlHideManualCarrier()">✕</button>
+                </div>
+            </div>
             <div id="wcotl-at-message" style="font-size:12px;margin-top:4px;"></div>
 
             <script>
@@ -542,7 +559,9 @@ class WCOTL_Admin {
                 var num = document.getElementById('wcotl-real-number').value.trim();
                 if (!num) { alert('Please enter carrier tracking number first.'); return; }
                 var msg = document.getElementById('wcotl-at-message');
+                msg.style.color = '#888';
                 msg.textContent = '⏳ Detecting...';
+                document.getElementById('wcotl-manual-carrier-row').style.display = 'none';
                 fetch(WCOTL_AJAX.url, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -552,12 +571,16 @@ class WCOTL_Admin {
                         number: num
                     })
                 }).then(r => r.json()).then(res => {
-                    if (!res.success) { msg.textContent = '❌ ' + (res.data || 'Error'); return; }
+                    if (!res.success) { msg.style.color = '#c0392b'; msg.textContent = '❌ ' + (res.data || 'Error'); return; }
                     var carriers = res.data;
                     var sel = document.getElementById('wcotl-carrier-select');
                     sel.innerHTML = '<option value="0">— Auto-detect —</option>';
                     if (Object.keys(carriers).length === 0) {
-                        msg.textContent = '⚠ No carrier detected. Select manually.';
+                        // No carriers detected – show the manual input panel
+                        msg.style.color = '#888';
+                        msg.textContent = '';
+                        document.getElementById('wcotl-manual-carrier-row').style.display = 'block';
+                        document.getElementById('wcotl-manual-carrier-code').focus();
                     } else {
                         for (var code in carriers) {
                             var opt = document.createElement('option');
@@ -566,10 +589,37 @@ class WCOTL_Admin {
                             sel.appendChild(opt);
                         }
                         sel.selectedIndex = 1;
-                        msg.textContent = '✓ ' + Object.keys(carriers).length + ' carrier(s) found. Select and save.';
                         msg.style.color = '#1e8449';
+                        msg.textContent = '✓ ' + Object.keys(carriers).length + ' carrier(s) found. Select and save.';
                     }
-                }).catch(e => { msg.textContent = '❌ Network error.'; });
+                }).catch(e => { msg.style.color = '#c0392b'; msg.textContent = '❌ Network error.'; });
+            }
+
+            function wcotlUseManualCarrier() {
+                var code = document.getElementById('wcotl-manual-carrier-code').value.trim();
+                if (!code || isNaN(parseInt(code, 10))) {
+                    alert('Please enter a valid numeric carrier code.'); return;
+                }
+                var sel = document.getElementById('wcotl-carrier-select');
+                // Remove any previous manual entry
+                var existing = sel.querySelector('option[data-manual]');
+                if (existing) existing.remove();
+                var opt = document.createElement('option');
+                opt.value = code;
+                opt.textContent = 'Carrier #' + code + ' (manual)';
+                opt.setAttribute('data-manual', '1');
+                opt.selected = true;
+                sel.appendChild(opt);
+                document.getElementById('wcotl-manual-carrier-row').style.display = 'none';
+                var msg = document.getElementById('wcotl-at-message');
+                msg.style.color = '#1a5fa8';
+                msg.textContent = '✓ Carrier code #' + code + ' set. Click Save to confirm.';
+            }
+
+            function wcotlHideManualCarrier() {
+                document.getElementById('wcotl-manual-carrier-row').style.display = 'none';
+                var msg = document.getElementById('wcotl-at-message');
+                msg.textContent = '';
             }
 
             function wcotlSaveAutoTracking() {
