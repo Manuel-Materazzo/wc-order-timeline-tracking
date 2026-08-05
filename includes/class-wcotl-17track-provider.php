@@ -28,15 +28,24 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
     /** API base URL */
     const BASE_URL = 'https://api.17track.net/track/v2.4/';
 
-    /** 17TRACK package_status → normalised status mapping */
+    /**
+     * 17TRACK v2.4 latest_status.status string → normalised status mapping.
+     *
+     * Actual string values returned by the API (case-sensitive):
+     *   NotFound, InfoReceived, InTransit, Expired, AvailableForPickup,
+     *   Delivered, UndeliverableFailed, Returning, Returned, Exchanged.
+     */
     const STATUS_MAP = [
-        0   => 'not_found',
-        10  => 'in_transit',
-        20  => 'expired',
-        30  => 'in_transit',   // Pickup – still travelling
-        35  => 'in_transit',   // Undelivered – still active
-        40  => 'delivered',
-        50  => 'in_transit',   // Returned – still active for our purposes
+        'NotFound'              => 'not_found',
+        'InfoReceived'          => 'in_transit',
+        'InTransit'             => 'in_transit',
+        'Expired'               => 'expired',
+        'AvailableForPickup'    => 'in_transit',
+        'Delivered'             => 'delivered',
+        'UndeliverableFailed'   => 'in_transit',
+        'Returning'             => 'in_transit',
+        'Returned'              => 'in_transit',
+        'Exchanged'             => 'in_transit',
     ];
 
     /** @var string */
@@ -103,9 +112,9 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
             return $this->error_response( $response->get_error_message() );
         }
 
-        $body         = $response['body'] ?? [];
-        $accepted     = $body['data']['accepted'] ?? [];
-        $track_data   = $accepted[0] ?? null;
+        $body       = $response['body'] ?? [];
+        $accepted   = $body['data']['accepted'] ?? [];
+        $track_data = $accepted[0] ?? null;
 
         if ( ! $track_data ) {
             $rejected = $body['data']['rejected'] ?? [];
@@ -113,23 +122,37 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
             return $this->error_response( $err );
         }
 
-        $pkg_status = (int) ( $track_data['track']['w1'] ?? 0 );
-        $status     = self::STATUS_MAP[ $pkg_status ] ?? 'in_transit';
+        // v2.4: accepted[0].track_info.latest_status.status → string e.g. "InTransit", "Delivered"
+        $track_info = $track_data['track_info'] ?? [];
+        $status_raw = $track_info['latest_status']['status'] ?? 'NotFound';
+        $status     = self::STATUS_MAP[ $status_raw ] ?? 'in_transit';
 
-        // Parse events from track.z0 (timeline array)
+        // v2.4: accepted[0].track_info.tracking.providers[*].events[]
         $events    = [];
-        $raw_events = $track_data['track']['z0'] ?? [];
-        foreach ( $raw_events as $ev ) {
-            $date = $this->parse_17track_date( $ev['a'] ?? '' );
-            if ( ! $date ) continue;
-            $events[] = [
-                'date'     => $date,
-                'label'    => sanitize_text_field( $ev['z'] ?? $ev['c'] ?? '' ),
-                'location' => isset( $ev['l'] ) ? sanitize_text_field( $ev['l'] ) : null,
-            ];
+        $seen_keys = [];
+        $providers = $track_info['tracking']['providers'] ?? [];
+        foreach ( $providers as $provider ) {
+            foreach ( $provider['events'] ?? [] as $ev ) {
+                // Prefer time_iso (has timezone); fall back to time_utc
+                $time_str = $ev['time_iso'] ?? $ev['time_utc'] ?? '';
+                $date     = $this->parse_17track_date( $time_str );
+                if ( ! $date ) continue;
+                $label = sanitize_text_field( $ev['description'] ?? '' );
+                if ( empty( $label ) ) continue;
+                // Deduplicate across providers
+                $key = $date . '|' . $label;
+                if ( isset( $seen_keys[ $key ] ) ) continue;
+                $seen_keys[ $key ] = true;
+                $events[] = [
+                    'date'     => $date,
+                    'label'    => $label,
+                    'location' => ( isset( $ev['location'] ) && $ev['location'] !== '' )
+                                    ? sanitize_text_field( $ev['location'] )
+                                    : null,
+                ];
+            }
         }
 
-        // Sort ascending
         usort( $events, fn( $a, $b ) => strcmp( $a['date'], $b['date'] ) );
 
         return [

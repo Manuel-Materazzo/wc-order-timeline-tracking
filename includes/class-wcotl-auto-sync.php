@@ -234,7 +234,7 @@ class WCOTL_Auto_Sync {
             if ( isset( $existing_keys[ $key ] ) ) continue;
             if ( empty( $ev['label'] ) ) continue;
 
-            $note = $ev['location'] ? '📍 ' . $ev['location'] : null;
+            $note = $ev['location'] ? $ev['location'] : null;
 
             $wpdb->insert( $table, [
                 'tracking_code' => $tracking_code,
