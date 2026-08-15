@@ -125,6 +125,7 @@ class WCOTL_DB {
                  WHERE t.order_id = %d
                    AND m.meta_key   = 'delivered_at'
                    AND m.meta_value != ''
+                 ORDER BY m.meta_value DESC
                  LIMIT 1",
                 $order_id
             )
