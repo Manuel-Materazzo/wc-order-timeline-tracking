@@ -226,6 +226,15 @@ class WCOTL_Auto_Sync {
 
         // Get order_id for new rows.
         $order_id = absint( WCOTL_DB::get_meta( $tracking_code, 'order_id' ) ?: 0 );
+        if ( ! $order_id ) {
+            $existing_order_id = $wpdb->get_var(
+                $wpdb->prepare( "SELECT order_id FROM {$table} WHERE tracking_code = %s AND order_id > 0 LIMIT 1", $tracking_code )
+            );
+            if ( $existing_order_id ) {
+                $order_id = absint( $existing_order_id );
+                WCOTL_DB::set_meta( $tracking_code, 'order_id', $order_id );
+            }
+        }
 
         $latest_date = null;
 
