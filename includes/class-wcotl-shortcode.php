@@ -30,7 +30,11 @@ public static function render() {
         );
 
         if ( empty( $steps ) ) {
-            $error = 'No order found for tracking code <strong>' . esc_html( $code ) . '</strong>. Please verify the code and try again.';
+            $error = sprintf(
+                /* translators: %s is the tracking code */
+                __( 'No order found for tracking code <strong>%s</strong>. Please verify the code and try again.', 'wc-order-timeline' ),
+                esc_html( $code )
+            );
         }
     }
 

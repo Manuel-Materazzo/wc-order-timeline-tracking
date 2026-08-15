@@ -22,6 +22,9 @@ class WCOTL_Admin_Presets {
             $_GET['action'] === 'delete_preset' &&
             wp_verify_nonce( $_GET['_wpnonce'], 'wcotl_delete_preset' )
         ) {
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+            }
             $wpdb->delete( $t, [ 'id' => absint( $_GET['preset_id'] ) ] );
             $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Preset deleted.', 'wc-order-timeline' ) . '</p></div>';
         }
@@ -31,6 +34,9 @@ class WCOTL_Admin_Presets {
             isset( $_POST['wcotl_edit_preset'], $_POST['_wpnonce_ep'], $_POST['preset_id'] ) &&
             wp_verify_nonce( $_POST['_wpnonce_ep'], 'wcotl_edit_preset_' . absint( $_POST['preset_id'] ) )
         ) {
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+            }
             $pid   = absint( $_POST['preset_id'] );
             $name  = sanitize_text_field( wp_unslash( $_POST['preset_name'] ?? '' ) );
             $label = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ) );
@@ -56,6 +62,9 @@ class WCOTL_Admin_Presets {
             isset( $_POST['wcotl_add_preset'], $_POST['_wpnonce_ap'] ) &&
             wp_verify_nonce( $_POST['_wpnonce_ap'], 'wcotl_add_preset' )
         ) {
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+            }
             $name  = sanitize_text_field( wp_unslash( $_POST['preset_name'] ?? '' ) );
             $label = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ) );
             $note  = sanitize_textarea_field( wp_unslash( $_POST['step_note'] ?? '' ) );
