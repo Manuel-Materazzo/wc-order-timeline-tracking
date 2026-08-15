@@ -73,10 +73,6 @@ class WCOTL_Settings {
         // update_option triggers the reschedule hook if interval changed.
         update_option( 'wcotl_sync_interval', $interval );
 
-        if ( $interval !== $old_interval ) {
-            WCOTL_Auto_Sync::reschedule( $old_interval, $interval );
-        }
-
         wp_redirect( admin_url( 'admin.php?page=wcotl-settings&saved=1' ) );
         exit;
     }
