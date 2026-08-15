@@ -160,7 +160,7 @@ class WCOTL_Admin {
             }
         }
 
-        // Delete tracking code (all steps)
+        // Delete tracking code (all steps and metadata)
         if (
             isset( $_GET['action'], $_GET['tracking_code'], $_GET['_wpnonce'] ) &&
             $_GET['action'] === 'delete_code' &&
@@ -169,8 +169,10 @@ class WCOTL_Admin {
             if ( ! current_user_can( 'manage_woocommerce' ) ) {
                 wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
             }
-            $wpdb->delete( $table, [ 'tracking_code' => sanitize_text_field( $_GET['tracking_code'] ) ] );
-            echo '<div class="notice notice-success is-dismissible"><p>Code deleted.</p></div>';
+            $code_to_delete = sanitize_text_field( wp_unslash( $_GET['tracking_code'] ) );
+            $wpdb->delete( $table, [ 'tracking_code' => $code_to_delete ] );
+            $wpdb->delete( $wpdb->prefix . 'order_timeline_meta', [ 'tracking_code' => $code_to_delete ] );
+            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Code deleted.', 'wc-order-timeline' ) . '</p></div>';
         }
 
         // Fetch all distinct tracking codes
