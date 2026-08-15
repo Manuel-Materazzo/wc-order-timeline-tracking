@@ -7,7 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class WCOTL_DB {
 
     public static function init() {
-        add_action( 'plugins_loaded', array( __CLASS__, 'maybe_upgrade' ) );
+        add_action( 'admin_init', array( __CLASS__, 'maybe_upgrade' ) );
     }
 
     public static function activate() {
@@ -59,11 +59,11 @@ class WCOTL_DB {
         dbDelta( $sql_meta );
         dbDelta( $sql_presets );
 
-        update_option( 'wcotl_db_version', '1.4' );
+        update_option( 'wcotl_db_version', '1.5.0' );
     }
 
     public static function maybe_upgrade() {
-        if ( get_option( 'wcotl_db_version' ) !== '1.4' ) {
+        if ( get_option( 'wcotl_db_version' ) !== '1.5.0' ) {
             WCOTL_DB::activate();
             // Migrazione: aggiunge le colonne se non esistono già
             global $wpdb;
