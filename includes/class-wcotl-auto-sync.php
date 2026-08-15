@@ -92,37 +92,103 @@ class WCOTL_Auto_Sync {
      * ------------------------------------------------------------------ */
 
     /**
+     * Meta key: datetime at which this tracking code should next be synced.
+     * NULL or past means "due now". Set to NOW()+interval after each sync.
+     */
+    const META_NEXT_SYNC_AT = 'auto_tracking_next_sync_at';
+
+    /**
      * Main sync method – executed by WP-Cron.
+     *
+     * Uses a per-shipment `next_sync_at` cursor so every active tracking code
+     * is guaranteed to be processed in turn regardless of catalog size:
+     *
+     *   - The query selects only codes that are *due* (next_sync_at <= NOW()
+     *     or never synced yet), ordered oldest-due first.
+     *   - After each successful sync the code's next_sync_at is pushed forward
+     *     by the configured interval, so it won't be re-queried until then.
+     *   - The loop runs until the PHP execution time budget is exhausted.
+     *     Any codes not reached this tick will simply be first in line next
+     *     tick (their next_sync_at has not been advanced, so they stay at the
+     *     front of the queue).
+     *
+     * Result: one knob (sync interval) means one thing ("how often each
+     * shipment is checked"), no silent skipping, no coupled batch/interval
+     * parameters.
      */
     public static function run_sync() {
         $provider = self::get_provider();
         if ( ! $provider || ! $provider->is_configured() ) {
-            return; // No API key set – nothing to do.
+            return;
         }
 
         global $wpdb;
         $meta_table = $wpdb->prefix . 'order_timeline_meta';
 
-        // Find all tracking codes that have a real tracking number and sync is not stopped.
+        // How many seconds per tick we are willing to spend.
+        $max_execution = (int) ini_get( 'max_execution_time' );
+        if ( $max_execution <= 0 || $max_execution > 120 ) {
+            $time_budget = 50; // conservative default for unlimited / very long limits
+        } else {
+            $time_budget = max( 10, $max_execution - 10 );
+        }
+
+        $start = microtime( true );
+
+        // How far ahead to schedule the next sync for each processed shipment.
+        $interval_seconds = max( 1, (int) get_option( 'wcotl_sync_interval', 1 ) ) * HOUR_IN_SECONDS;
+
+        /*
+         * Pull codes that are due for a sync, oldest-due first.
+         * "Due" means next_sync_at IS NULL (never synced) or <= NOW().
+         * We use a LEFT JOIN so that codes with no next_sync_at row at all
+         * are also included (NULL IS NULL => due).
+         * Sync-stopped codes are excluded via a NOT EXISTS sub-select.
+         *
+         * No LIMIT – we process as many as the time budget allows, and
+         * every code we process gets its next_sync_at advanced, so it
+         * won't appear in the query again until its next due time.
+         */
         $codes = $wpdb->get_col(
             $wpdb->prepare(
                 "SELECT DISTINCT m.tracking_code
                  FROM {$meta_table} m
+                 LEFT JOIN {$meta_table} ns
+                        ON ns.tracking_code = m.tracking_code
+                       AND ns.meta_key = %s
                  WHERE m.meta_key = %s
                    AND m.meta_value != ''
+                   AND ( ns.meta_value IS NULL OR ns.meta_value <= %s )
                    AND NOT EXISTS (
-                       SELECT 1 FROM {$meta_table} s
-                       WHERE s.tracking_code = m.tracking_code
-                         AND s.meta_key = %s
-                         AND s.meta_value = '1'
-                   )",
+                       SELECT 1 FROM {$meta_table} st
+                       WHERE st.tracking_code = m.tracking_code
+                         AND st.meta_key = %s
+                         AND st.meta_value = '1'
+                   )
+                 ORDER BY ns.meta_value ASC",
+                self::META_NEXT_SYNC_AT,
                 self::META_REAL_NUMBER,
+                current_time( 'mysql' ),
                 self::META_SYNC_STOPPED
             )
         );
 
         foreach ( $codes as $tracking_code ) {
+            if ( ( microtime( true ) - $start ) >= $time_budget ) {
+                // Time budget exhausted. This code's next_sync_at has NOT been
+                // advanced, so it will be first in the queue next tick.
+                break;
+            }
+
             self::sync_code( $tracking_code, $provider );
+
+            // Advance the per-shipment cursor regardless of whether sync_code
+            // found new events – we still checked, that counts as a sync.
+            WCOTL_DB::set_meta(
+                $tracking_code,
+                self::META_NEXT_SYNC_AT,
+                gmdate( 'Y-m-d H:i:s', time() + $interval_seconds )
+            );
         }
     }
 

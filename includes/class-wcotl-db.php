@@ -59,24 +59,33 @@ class WCOTL_DB {
         dbDelta( $sql_meta );
         dbDelta( $sql_presets );
 
-        update_option( 'wcotl_db_version', '1.5.0' );
+        update_option( 'wcotl_db_version', '1.5.1' );
     }
 
     public static function maybe_upgrade() {
-        if ( get_option( 'wcotl_db_version' ) !== '1.5.0' ) {
+        if ( get_option( 'wcotl_db_version' ) !== '1.5.1' ) {
             WCOTL_DB::activate();
-            // Migrazione: aggiunge le colonne se non esistono già
+            // Migrate: add columns that may not exist in older installs.
             global $wpdb;
             $table = $wpdb->prefix . 'order_timeline';
-            $cols  = $wpdb->get_col( "SHOW COLUMNS FROM {$table}" );
-            if ( ! in_array( 'step_voided', $cols, true ) ) {
+            $meta  = $wpdb->prefix . 'order_timeline_meta';
+
+            $timeline_cols = $wpdb->get_col( "SHOW COLUMNS FROM {$table}" );
+            if ( ! in_array( 'step_voided', $timeline_cols, true ) ) {
                 $wpdb->query( "ALTER TABLE {$table} ADD COLUMN step_voided TINYINT(1) NOT NULL DEFAULT 0" );
             }
-            if ( ! in_array( 'step_void_reason', $cols, true ) ) {
+            if ( ! in_array( 'step_void_reason', $timeline_cols, true ) ) {
                 $wpdb->query( "ALTER TABLE {$table} ADD COLUMN step_void_reason TEXT DEFAULT NULL" );
             }
-            if ( ! in_array( 'step_source', $cols, true ) ) {
+            if ( ! in_array( 'step_source', $timeline_cols, true ) ) {
                 $wpdb->query( "ALTER TABLE {$table} ADD COLUMN step_source VARCHAR(16) NOT NULL DEFAULT 'manual'" );
+            }
+
+            // 1.5.1: per-shipment next_sync_at cursor for the auto-sync engine.
+            $meta_cols = $wpdb->get_col( "SHOW COLUMNS FROM {$meta}" );
+            if ( ! in_array( 'next_sync_at', $meta_cols, true ) ) {
+                $wpdb->query( "ALTER TABLE {$meta} ADD COLUMN next_sync_at DATETIME DEFAULT NULL" );
+                $wpdb->query( "ALTER TABLE {$meta} ADD INDEX idx_next_sync_at (next_sync_at)" );
             }
         }
     }

@@ -124,6 +124,8 @@ class WCOTL_Settings {
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_SYNC_STOPPED,  '' );
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_STOP_REASON,   '' );
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_LAST_STATUS,   '' );
+            // Clear the cursor so this code is picked up on the very next cron tick.
+            WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_NEXT_SYNC_AT,  '' );
         } else {
             // Clearing the real number disables auto-tracking for this code.
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_REAL_NUMBER, '' );
@@ -166,6 +168,8 @@ class WCOTL_Settings {
         WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_SYNC_STOPPED, '' );
         WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_STOP_REASON,  '' );
         WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_LAST_STATUS,  '' );
+        // Clear the cursor so the resumed code is picked up on the very next cron tick.
+        WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_NEXT_SYNC_AT, '' );
 
         wp_send_json_success( 'Sync resumed.' );
     }
