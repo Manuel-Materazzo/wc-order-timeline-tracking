@@ -10,36 +10,128 @@ class WCOTL_Shortcode {
         add_shortcode( 'wc_order_timeline_tracking', array( __CLASS__, 'render' ) );
     }
 
+    /**
+     * Get client IP address safely.
+     *
+     * @return string
+     */
+    public static function get_client_ip() {
+        $ip = '';
+        if ( ! empty( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) {
+            $ip = sanitize_text_field( wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ) );
+        } elseif ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
+            $forwarded = explode( ',', sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) );
+            $ip = trim( $forwarded[0] );
+        } elseif ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
+            $ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
+        }
+
+        return filter_var( $ip, FILTER_VALIDATE_IP ) ? $ip : '127.0.0.1';
+    }
+
+    /**
+     * Verify Cloudflare Turnstile token via siteverify API endpoint.
+     *
+     * @param string $token
+     * @param string $client_ip
+     * @return bool
+     */
+    public static function verify_turnstile( $token, $client_ip = '' ) {
+        $secret_key = get_option( 'wcotl_turnstile_secret_key', '' );
+        if ( empty( $secret_key ) || empty( $token ) ) {
+            return false;
+        }
+
+        $response = wp_remote_post( 'https://challenges.cloudflare.com/turnstile/v0/siteverify', [
+            'timeout' => 10,
+            'body'    => [
+                'secret'   => $secret_key,
+                'response' => $token,
+                'remoteip' => $client_ip,
+            ],
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            return false;
+        }
+
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+
+        return ! empty( $data['success'] );
+    }
+
+    /**
+     * Check if client IP has exceeded the allowed rate limit window.
+     *
+     * @param string $client_ip
+     * @param int    $max_requests
+     * @return bool True if rate limited, false otherwise.
+     */
+    public static function check_rate_limit( $client_ip, $max_requests = 15 ) {
+        $transient_key = 'wcotl_rate_' . md5( $client_ip );
+        $current_count = (int) get_transient( $transient_key );
+
+        $current_count++;
+        set_transient( $transient_key, $current_count, 60 );
+
+        return ( $current_count > $max_requests );
+    }
+
 public static function render() {
     ob_start();
 
-    $code   = isset( $_GET['tracking'] ) ? sanitize_text_field( wp_unslash( $_GET['tracking'] ) ) : '';
-    $steps  = [];
-    $meta   = null;
-    $error  = '';
+    $site_key         = get_option( 'wcotl_turnstile_site_key', '' );
+    $secret_key       = get_option( 'wcotl_turnstile_secret_key', '' );
+    $turnstile_active = ( ! empty( $site_key ) && ! empty( $secret_key ) );
+    $max_requests     = max( 1, (int) get_option( 'wcotl_rate_limit_max_requests', 15 ) );
+    $client_ip        = self::get_client_ip();
+
+    $code             = isset( $_GET['tracking'] ) ? sanitize_text_field( wp_unslash( $_GET['tracking'] ) ) : '';
+    $turnstile_token  = isset( $_REQUEST['cf-turnstile-response'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['cf-turnstile-response'] ) ) : '';
+    $steps            = [];
+    $meta             = null;
+    $error            = '';
 
     if ( $code !== '' ) {
-        global $wpdb;
-        $table = $wpdb->prefix . 'order_timeline';
+        $is_rate_limited = self::check_rate_limit( $client_ip, $max_requests );
 
-        $steps = $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT * FROM {$table} WHERE tracking_code = %s ORDER BY step_date ASC",
-                $code
-            )
-        );
+        if ( $turnstile_active ) {
+            if ( ! empty( $turnstile_token ) ) {
+                $is_valid = self::verify_turnstile( $turnstile_token, $client_ip );
+                if ( ! $is_valid ) {
+                    $error = __( 'Security verification failed. Please complete the challenge and try again.', 'wc-order-timeline' );
+                }
+            } elseif ( $is_rate_limited ) {
+                $error = __( 'Security verification required. Please complete the challenge below before searching.', 'wc-order-timeline' );
+            }
+        } elseif ( $is_rate_limited ) {
+            $error = __( 'Too many tracking requests. Please wait a minute and try again.', 'wc-order-timeline' );
+        }
 
-        if ( empty( $steps ) ) {
-            $error = sprintf(
-                /* translators: %s is the tracking code */
-                __( 'No order found for tracking code <strong>%s</strong>. Please verify the code and try again.', 'wc-order-timeline' ),
-                esc_html( $code )
+        if ( empty( $error ) ) {
+            global $wpdb;
+            $table = $wpdb->prefix . 'order_timeline';
+
+            $steps = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT * FROM {$table} WHERE tracking_code = %s ORDER BY step_date ASC",
+                    $code
+                )
             );
+
+            if ( empty( $steps ) ) {
+                $error = sprintf(
+                    /* translators: %s is the tracking code */
+                    __( 'No order found for tracking code <strong>%s</strong>. Please verify the code and try again.', 'wc-order-timeline' ),
+                    esc_html( $code )
+                );
+            }
         }
     }
 
-    $estimated_delivery = ( $code !== '' ) ? WCOTL_DB::get_meta( $code, 'estimated_delivery' ) : null;
-    $delivered_at       = ( $code !== '' ) ? WCOTL_DB::get_meta( $code, 'delivered_at' )       : null;
+    $estimated_delivery = ( $code !== '' && empty( $error ) ) ? WCOTL_DB::get_meta( $code, 'estimated_delivery' ) : null;
+    $delivered_at       = ( $code !== '' && empty( $error ) ) ? WCOTL_DB::get_meta( $code, 'delivered_at' )       : null;
 
     // SVG icon map
     $icons = WCOTL_Icons::map();
@@ -465,7 +557,7 @@ public static function render() {
                     <?php
                     // Preserva gli altri parametri GET (es. page id in WP)
                     foreach ( $_GET as $k => $v ) {
-                        if ( $k === 'tracking' ) continue;
+                        if ( $k === 'tracking' || $k === 'cf-turnstile-response' ) continue;
                         echo '<input type="hidden" name="' . esc_attr( $k ) . '" value="' . esc_attr( $v ) . '">';
                     }
                     ?>
@@ -481,6 +573,12 @@ public static function render() {
                         >
                         <button type="submit"><?php esc_html_e( 'Search', 'wc-order-timeline' ); ?></button>
                     </div>
+                    <?php if ( $turnstile_active ) : ?>
+                        <div class="wcotl-turnstile-wrap" style="margin-top:14px;display:flex;justify-content:center;">
+                            <div class="cf-turnstile" data-sitekey="<?php echo esc_attr( $site_key ); ?>" data-theme="auto"></div>
+                        </div>
+                        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+                    <?php endif; ?>
                 </form>
             </div>
 

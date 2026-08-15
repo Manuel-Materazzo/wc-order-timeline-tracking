@@ -34,4 +34,7 @@ if ( ! empty( $delete_data ) ) {
     delete_option( 'wcotl_sync_interval' );
     delete_option( 'wcotl_inactivity_days' );
     delete_option( 'wcotl_delete_data_on_uninstall' );
+    delete_option( 'wcotl_turnstile_site_key' );
+    delete_option( 'wcotl_turnstile_secret_key' );
+    delete_option( 'wcotl_rate_limit_max_requests' );
 }

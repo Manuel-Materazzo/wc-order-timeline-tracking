@@ -54,6 +54,9 @@ class WCOTL_Settings {
         register_setting( 'wcotl_settings_group', 'wcotl_sync_interval',             'absint' );
         register_setting( 'wcotl_settings_group', 'wcotl_inactivity_days',           'absint' );
         register_setting( 'wcotl_settings_group', 'wcotl_delete_data_on_uninstall',  'absint' );
+        register_setting( 'wcotl_settings_group', 'wcotl_turnstile_site_key',        'sanitize_text_field' );
+        register_setting( 'wcotl_settings_group', 'wcotl_turnstile_secret_key',      'sanitize_text_field' );
+        register_setting( 'wcotl_settings_group', 'wcotl_rate_limit_max_requests',   'absint' );
     }
 
     /* ------------------------------------------------------------------
@@ -66,16 +69,22 @@ class WCOTL_Settings {
         }
         check_admin_referer( 'wcotl_settings_nonce' );
 
-        $api_key     = sanitize_text_field( wp_unslash( $_POST['wcotl_17track_api_key'] ?? '' ) );
-        $interval    = max( 1, absint( $_POST['wcotl_sync_interval'] ?? 1 ) );
-        $inactive    = max( 1, absint( $_POST['wcotl_inactivity_days'] ?? 45 ) );
-        $delete_data = ! empty( $_POST['wcotl_delete_data_on_uninstall'] ) ? 1 : 0;
+        $api_key          = sanitize_text_field( wp_unslash( $_POST['wcotl_17track_api_key'] ?? '' ) );
+        $interval         = max( 1, absint( $_POST['wcotl_sync_interval'] ?? 1 ) );
+        $inactive         = max( 1, absint( $_POST['wcotl_inactivity_days'] ?? 45 ) );
+        $delete_data      = ! empty( $_POST['wcotl_delete_data_on_uninstall'] ) ? 1 : 0;
+        $turnstile_site   = sanitize_text_field( wp_unslash( $_POST['wcotl_turnstile_site_key'] ?? '' ) );
+        $turnstile_secret = sanitize_text_field( wp_unslash( $_POST['wcotl_turnstile_secret_key'] ?? '' ) );
+        $rate_limit_max   = max( 1, absint( $_POST['wcotl_rate_limit_max_requests'] ?? 15 ) );
 
         $old_interval = (int) get_option( 'wcotl_sync_interval', 1 );
 
         update_option( 'wcotl_17track_api_key',          $api_key );
         update_option( 'wcotl_inactivity_days',          $inactive );
         update_option( 'wcotl_delete_data_on_uninstall', $delete_data );
+        update_option( 'wcotl_turnstile_site_key',        $turnstile_site );
+        update_option( 'wcotl_turnstile_secret_key',      $turnstile_secret );
+        update_option( 'wcotl_rate_limit_max_requests',   $rate_limit_max );
 
         // update_option triggers the reschedule hook if interval changed.
         update_option( 'wcotl_sync_interval', $interval );
@@ -282,6 +291,78 @@ class WCOTL_Settings {
 
                     <button type="submit" class="button button-primary" style="margin-top:16px;">
                         Save Settings
+                    </button>
+                </form>
+            </div>
+
+            <!-- Cloudflare Turnstile & Anti-Scraping Protection -->
+            <?php
+            $turnstile_site_key   = get_option( 'wcotl_turnstile_site_key', '' );
+            $turnstile_secret_key = get_option( 'wcotl_turnstile_secret_key', '' );
+            $rate_limit_max       = max( 1, (int) get_option( 'wcotl_rate_limit_max_requests', 15 ) );
+            $turnstile_configured = ( ! empty( $turnstile_site_key ) && ! empty( $turnstile_secret_key ) );
+            ?>
+            <div class="card" style="max-width:620px;margin-top:20px;">
+                <h2>
+                    <span class="dashicons dashicons-shield"></span>
+                    Frontend Security &amp; Cloudflare Turnstile
+                </h2>
+                <p style="font-size:13px;color:#646970;margin-bottom:16px;">
+                    Protect the frontend order tracking lookup shortcode (<code>[wc_order_timeline_tracking]</code>) from automated bot enumeration, scraping, and brute-force queries.
+                </p>
+
+                <form method="POST" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
+                    <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
+                    <input type="hidden" name="action" value="wcotl_save_settings">
+                    <input type="hidden" name="wcotl_17track_api_key" value="<?php echo esc_attr( $api_key ); ?>">
+                    <input type="hidden" name="wcotl_sync_interval" value="<?php echo esc_attr( $sync_interval ); ?>">
+                    <input type="hidden" name="wcotl_inactivity_days" value="<?php echo esc_attr( $inactivity_days ); ?>">
+                    <input type="hidden" name="wcotl_delete_data_on_uninstall" value="<?php echo esc_attr( $delete_data_on_uninstall ); ?>">
+
+                    <div class="wcotl-form-row">
+                        <label>
+                            Cloudflare Turnstile Site Key
+                            <?php if ( $turnstile_configured ) : ?>
+                                <span style="color:#008a20;font-size:11px;margin-left:6px;">✓ Active</span>
+                            <?php else : ?>
+                                <span style="color:#8c8f94;font-size:11px;margin-left:6px;">(Optional)</span>
+                            <?php endif; ?>
+                        </label>
+                        <input type="text" name="wcotl_turnstile_site_key"
+                               value="<?php echo esc_attr( $turnstile_site_key ); ?>"
+                               placeholder="e.g. 0x4AAAAAA..."
+                               style="font-family:monospace;width:100%;">
+                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
+                            Obtain your Turnstile Site Key and Secret Key from the <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank">Cloudflare Dashboard</a>.
+                        </small>
+                    </div>
+
+                    <div class="wcotl-form-row">
+                        <label>Cloudflare Turnstile Secret Key</label>
+                        <div style="display:flex;gap:6px;">
+                            <input type="password" id="wcotl_turnstile_secret_field" name="wcotl_turnstile_secret_key"
+                                   value="<?php echo esc_attr( $turnstile_secret_key ); ?>"
+                                   placeholder="e.g. 0x4AAAAAA..."
+                                   style="font-family:monospace;flex:1;">
+                            <button type="button" class="button" onclick="var f = document.getElementById('wcotl_turnstile_secret_field'); f.type = f.type === 'password' ? 'text' : 'password'; this.textContent = f.type === 'password' ? 'Show' : 'Hide';">Show</button>
+                        </div>
+                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
+                            Used to securely verify Turnstile challenge tokens server-side.
+                        </small>
+                    </div>
+
+                    <div class="wcotl-form-row">
+                        <label>Rate Limit Threshold (max requests per minute per IP)</label>
+                        <input type="number" name="wcotl_rate_limit_max_requests"
+                               value="<?php echo esc_attr( $rate_limit_max ); ?>"
+                               min="1" max="120" step="1" style="width:120px;">
+                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
+                            Default: 15 requests/minute. Limits rapid unauthenticated tracking searches per IP.
+                        </small>
+                    </div>
+
+                    <button type="submit" class="button button-primary" style="margin-top:16px;">
+                        Save Security Settings
                     </button>
                 </form>
             </div>
