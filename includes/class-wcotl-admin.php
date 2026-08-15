@@ -1005,7 +1005,7 @@ class WCOTL_Admin {
 
                     <div class="wcotl-form-row">
                         <label>Date and Time <span style="color:#d63638">*</span></label>
-                        <input type="datetime-local" name="step_date" value="<?php echo esc_attr( date('Y-m-d\TH:i') ); ?>" required>
+                        <input type="datetime-local" name="step_date" value="<?php echo esc_attr( wp_date('Y-m-d\TH:i') ); ?>" required>
                     </div>
                     <div class="wcotl-form-row">
                         <label>Step description <span style="color:#d63638">*</span></label>
