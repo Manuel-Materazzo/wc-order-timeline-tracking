@@ -78,60 +78,86 @@ class WCOTL_Shortcode {
         return ( $current_count > $max_requests );
     }
 
-public static function render() {
-    ob_start();
-
-    $site_key         = get_option( 'wcotl_turnstile_site_key', '' );
-    $secret_key       = get_option( 'wcotl_turnstile_secret_key', '' );
-    $turnstile_active = ( ! empty( $site_key ) && ! empty( $secret_key ) );
-    $max_requests     = max( 1, (int) get_option( 'wcotl_rate_limit_max_requests', 15 ) );
-    $client_ip        = self::get_client_ip();
-
-    $code             = isset( $_GET['tracking'] ) ? sanitize_text_field( wp_unslash( $_GET['tracking'] ) ) : '';
-    $turnstile_token  = isset( $_REQUEST['cf-turnstile-response'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['cf-turnstile-response'] ) ) : '';
-    $steps            = [];
-    $meta             = null;
-    $error            = '';
-
-    if ( $code !== '' ) {
-        $is_rate_limited = self::check_rate_limit( $client_ip, $max_requests );
-
-        if ( $turnstile_active ) {
-            if ( ! empty( $turnstile_token ) ) {
-                $is_valid = self::verify_turnstile( $turnstile_token, $client_ip );
-                if ( ! $is_valid ) {
-                    $error = __( 'Security verification failed. Please complete the challenge and try again.', 'wc-order-timeline' );
-                }
-            } elseif ( $is_rate_limited ) {
-                $error = __( 'Security verification required. Please complete the challenge below before searching.', 'wc-order-timeline' );
-            }
-        } elseif ( $is_rate_limited ) {
-            $error = __( 'Too many tracking requests. Please wait a minute and try again.', 'wc-order-timeline' );
-        }
-
-        if ( empty( $error ) ) {
-            global $wpdb;
-            $table = $wpdb->prefix . 'order_timeline';
-
-            $steps = $wpdb->get_results(
-                $wpdb->prepare(
-                    "SELECT * FROM {$table} WHERE tracking_code = %s ORDER BY step_date ASC",
-                    $code
-                )
-            );
-
-            if ( empty( $steps ) ) {
-                $error = sprintf(
-                    /* translators: %s is the tracking code */
-                    __( 'No order found for tracking code <strong>%s</strong>. Please verify the code and try again.', 'wc-order-timeline' ),
-                    esc_html( $code )
-                );
-            }
-        }
+    /**
+     * Reset rate limit transient for a client IP upon successful challenge completion.
+     *
+     * @param string $client_ip
+     */
+    public static function reset_rate_limit( $client_ip ) {
+        $transient_key = 'wcotl_rate_' . md5( $client_ip );
+        delete_transient( $transient_key );
     }
 
-    $estimated_delivery = ( $code !== '' && empty( $error ) ) ? WCOTL_DB::get_meta( $code, 'estimated_delivery' ) : null;
-    $delivered_at       = ( $code !== '' && empty( $error ) ) ? WCOTL_DB::get_meta( $code, 'delivered_at' )       : null;
+    public static function render() {
+        ob_start();
+
+        $site_key         = get_option( 'wcotl_turnstile_site_key', '' );
+        $secret_key       = get_option( 'wcotl_turnstile_secret_key', '' );
+        $turnstile_active = ( ! empty( $site_key ) && ! empty( $secret_key ) );
+        $max_requests     = max( 1, (int) get_option( 'wcotl_rate_limit_max_requests', 15 ) );
+        $client_ip        = self::get_client_ip();
+
+        $code             = isset( $_GET['tracking'] ) ? sanitize_text_field( wp_unslash( $_GET['tracking'] ) ) : '';
+        $turnstile_token  = isset( $_REQUEST['cf-turnstile-response'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['cf-turnstile-response'] ) ) : '';
+        $steps            = [];
+        $meta             = null;
+        $error            = '';
+        $show_turnstile   = false;
+
+        $transient_key   = 'wcotl_rate_' . md5( $client_ip );
+        $current_count   = (int) get_transient( $transient_key );
+        $is_rate_limited = ( $current_count >= $max_requests );
+
+        if ( $code !== '' ) {
+            if ( $turnstile_active && ! empty( $turnstile_token ) ) {
+                $is_valid = self::verify_turnstile( $turnstile_token, $client_ip );
+                if ( $is_valid ) {
+                    self::reset_rate_limit( $client_ip );
+                    $is_rate_limited = false;
+                } else {
+                    $error          = __( 'Security verification failed. Please complete the challenge and try again.', 'wc-order-timeline' );
+                    $show_turnstile = true;
+                }
+            } else {
+                $current_count++;
+                set_transient( $transient_key, $current_count, 60 );
+                $is_rate_limited = ( $current_count > $max_requests );
+
+                if ( $is_rate_limited ) {
+                    if ( $turnstile_active ) {
+                        $error          = __( 'Security verification required. Please complete the challenge below before searching.', 'wc-order-timeline' );
+                        $show_turnstile = true;
+                    } else {
+                        $error          = __( 'Too many tracking requests. Please wait a minute and try again.', 'wc-order-timeline' );
+                    }
+                }
+            }
+
+            if ( empty( $error ) ) {
+                global $wpdb;
+                $table = $wpdb->prefix . 'order_timeline';
+
+                $steps = $wpdb->get_results(
+                    $wpdb->prepare(
+                        "SELECT * FROM {$table} WHERE tracking_code = %s ORDER BY step_date ASC",
+                        $code
+                    )
+                );
+
+                if ( empty( $steps ) ) {
+                    $error = sprintf(
+                        /* translators: %s is the tracking code */
+                        __( 'No order found for tracking code <strong>%s</strong>. Please verify the code and try again.', 'wc-order-timeline' ),
+                        esc_html( $code )
+                    );
+                }
+            }
+        } elseif ( $is_rate_limited && $turnstile_active ) {
+            $show_turnstile = true;
+        }
+
+        $estimated_delivery = ( $code !== '' && empty( $error ) ) ? WCOTL_DB::get_meta( $code, 'estimated_delivery' ) : null;
+        $delivered_at       = ( $code !== '' && empty( $error ) ) ? WCOTL_DB::get_meta( $code, 'delivered_at' )       : null;
 
     // SVG icon map
     $icons = WCOTL_Icons::map();
@@ -573,7 +599,7 @@ public static function render() {
                         >
                         <button type="submit"><?php esc_html_e( 'Search', 'wc-order-timeline' ); ?></button>
                     </div>
-                    <?php if ( $turnstile_active ) : ?>
+                    <?php if ( $show_turnstile && $turnstile_active ) : ?>
                         <div class="wcotl-turnstile-wrap" style="margin-top:14px;display:flex;justify-content:center;">
                             <div class="cf-turnstile" data-sitekey="<?php echo esc_attr( $site_key ); ?>" data-theme="auto"></div>
                         </div>
