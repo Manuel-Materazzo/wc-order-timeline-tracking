@@ -177,9 +177,9 @@ class WCOTL_Admin {
 
         // Fetch all distinct tracking codes
         $codes = $wpdb->get_results(
-            "SELECT tracking_code, order_id, COUNT(*) as steps, MAX(step_date) as last_update
+            "SELECT tracking_code, MAX(order_id) as order_id, COUNT(*) as steps, MAX(step_date) as last_update
              FROM {$table}
-             GROUP BY tracking_code, order_id
+             GROUP BY tracking_code
              ORDER BY last_update DESC"
         );
 
