@@ -450,13 +450,13 @@ public static function render() {
         <div class="wcotl-container">
 
             <div class="wcotl-header">
-                <span class="wcotl-header__eyebrow">Shipment &amp; Delivery</span>
-                <h1>Track your order</h1>
-                <p>Insert the tracking code recived via email.</p>
+                <span class="wcotl-header__eyebrow"><?php esc_html_e( 'Shipment & Delivery', 'wc-order-timeline' ); ?></span>
+                <h1><?php esc_html_e( 'Track your order', 'wc-order-timeline' ); ?></h1>
+                <p><?php esc_html_e( 'Insert the tracking code received via email.', 'wc-order-timeline' ); ?></p>
             </div>
 
             <div class="wcotl-search">
-                <label for="wcotl-input">Tracking code</label>
+                <label for="wcotl-input"><?php esc_html_e( 'Tracking code', 'wc-order-timeline' ); ?></label>
                 <form method="GET" action="">
                     <?php
                     // Preserva gli altri parametri GET (es. page id in WP)
@@ -470,12 +470,12 @@ public static function render() {
                             type="text"
                             id="wcotl-input"
                             name="tracking"
-                            placeholder="es. TRK-20240518-001"
+                            placeholder="<?php echo esc_attr__( 'e.g. TRK-20240518-001', 'wc-order-timeline' ); ?>"
                             value="<?php echo esc_attr( $code ); ?>"
                             autocomplete="off"
                             spellcheck="false"
                         >
-                        <button type="submit">Search</button>
+                        <button type="submit"><?php esc_html_e( 'Search', 'wc-order-timeline' ); ?></button>
                     </div>
                 </form>
             </div>
@@ -486,7 +486,7 @@ public static function render() {
 
             <?php if ( ! empty( $steps ) ) : ?>
                 <div class="wcotl-tracking-badge">
-                    <span class="wcotl-tracking-badge__label">Code</span>
+                    <span class="wcotl-tracking-badge__label"><?php esc_html_e( 'Code', 'wc-order-timeline' ); ?></span>
                     <span class="wcotl-tracking-badge__code"><?php echo esc_html( $code ); ?></span>
                 </div>
 
@@ -499,7 +499,7 @@ public static function render() {
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                     </div>
                     <div>
-                        <div class="wcotl-delivered__label">Delivered</div>
+                        <div class="wcotl-delivered__label"><?php esc_html_e( 'Delivered', 'wc-order-timeline' ); ?></div>
                         <div class="wcotl-delivered__date"><?php echo esc_html( $dd_label ); ?></div>
                     </div>
                 </div>
@@ -512,7 +512,7 @@ public static function render() {
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                     </div>
                     <div>
-                        <div class="wcotl-delivery__label">Estimated delivery</div>
+                        <div class="wcotl-delivery__label"><?php esc_html_e( 'Estimated delivery', 'wc-order-timeline' ); ?></div>
                         <div class="wcotl-delivery__date"><?php echo esc_html( $ed_label ); ?></div>
                     </div>
                 </div>
@@ -551,7 +551,7 @@ public static function render() {
                             <?php if ( $is_voided ) : ?>
                                 <div class="wcotl-step__void-badge">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-                                    Unconfirmed information
+                                    <?php esc_html_e( 'Unconfirmed information', 'wc-order-timeline' ); ?>
                                 </div>
                                 <?php if ( ! empty( $step->step_void_reason ) ) : ?>
                                     <div class="wcotl-step__void-reason"><?php echo nl2br( esc_html( $step->step_void_reason ) ); ?></div>

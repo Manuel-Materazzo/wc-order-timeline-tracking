@@ -23,7 +23,7 @@ class WCOTL_Admin_Presets {
             wp_verify_nonce( $_GET['_wpnonce'], 'wcotl_delete_preset' )
         ) {
             $wpdb->delete( $t, [ 'id' => absint( $_GET['preset_id'] ) ] );
-            $notice = '<div class="notice notice-success is-dismissible"><p>Preset deleted.</p></div>';
+            $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Preset deleted.', 'wc-order-timeline' ) . '</p></div>';
         }
 
         /* ---- EDIT (POST) ---- */
@@ -32,10 +32,10 @@ class WCOTL_Admin_Presets {
             wp_verify_nonce( $_POST['_wpnonce_ep'], 'wcotl_edit_preset_' . absint( $_POST['preset_id'] ) )
         ) {
             $pid   = absint( $_POST['preset_id'] );
-            $name  = sanitize_text_field( $_POST['preset_name'] ?? '' );
-            $label = sanitize_text_field( $_POST['step_label'] ?? '' );
-            $note  = sanitize_textarea_field( $_POST['step_note'] ?? '' );
-            $icon  = sanitize_key( $_POST['step_icon'] ?? 'truck' );
+            $name  = sanitize_text_field( wp_unslash( $_POST['preset_name'] ?? '' ) );
+            $label = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ) );
+            $note  = sanitize_textarea_field( wp_unslash( $_POST['step_note'] ?? '' ) );
+            $icon  = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ) );
             $order = absint( $_POST['sort_order'] ?? 0 );
             if ( $name && $label ) {
                 $wpdb->update( $t, [
@@ -45,9 +45,9 @@ class WCOTL_Admin_Presets {
                     'step_icon'   => $icon,
                     'sort_order'  => $order,
                 ], [ 'id' => $pid ] );
-                $notice = '<div class="notice notice-success is-dismissible"><p>Preset updated.</p></div>';
+                $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Preset updated.', 'wc-order-timeline' ) . '</p></div>';
             } else {
-                $notice = '<div class="notice notice-error is-dismissible"><p>Name and Step Description are required.</p></div>';
+                $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Name and Step Description are required.', 'wc-order-timeline' ) . '</p></div>';
             }
         }
 
@@ -56,10 +56,10 @@ class WCOTL_Admin_Presets {
             isset( $_POST['wcotl_add_preset'], $_POST['_wpnonce_ap'] ) &&
             wp_verify_nonce( $_POST['_wpnonce_ap'], 'wcotl_add_preset' )
         ) {
-            $name  = sanitize_text_field( $_POST['preset_name'] ?? '' );
-            $label = sanitize_text_field( $_POST['step_label'] ?? '' );
-            $note  = sanitize_textarea_field( $_POST['step_note'] ?? '' );
-            $icon  = sanitize_key( $_POST['step_icon'] ?? 'truck' );
+            $name  = sanitize_text_field( wp_unslash( $_POST['preset_name'] ?? '' ) );
+            $label = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ) );
+            $note  = sanitize_textarea_field( wp_unslash( $_POST['step_note'] ?? '' ) );
+            $icon  = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ) );
             $order = absint( $_POST['sort_order'] ?? 0 );
             if ( $name && $label ) {
                 $wpdb->insert( $t, [
@@ -69,9 +69,9 @@ class WCOTL_Admin_Presets {
                     'step_icon'   => $icon,
                     'sort_order'  => $order,
                 ] );
-                $notice = '<div class="notice notice-success is-dismissible"><p>Preset created successfully.</p></div>';
+                $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Preset created successfully.', 'wc-order-timeline' ) . '</p></div>';
             } else {
-                $notice = '<div class="notice notice-error is-dismissible"><p>Name and Step Description are required.</p></div>';
+                $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Name and Step Description are required.', 'wc-order-timeline' ) . '</p></div>';
             }
         }
 

@@ -252,7 +252,7 @@ class WCOTL_Admin {
             }
             $delivery_date = sanitize_text_field( wp_unslash( $_POST['estimated_delivery'] ?? '' ) );
             WCOTL_DB::set_meta( $code, 'estimated_delivery', $delivery_date );
-            $notice = '<div class="notice notice-success is-dismissible"><p>Estimated delivery date updated.</p></div>';
+            $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Estimated delivery date updated.', 'wc-order-timeline' ) . '</p></div>';
         }
 
         // Save actual delivery date
@@ -262,7 +262,7 @@ class WCOTL_Admin {
             }
             $delivered_date = sanitize_text_field( wp_unslash( $_POST['delivered_at'] ?? '' ) );
             WCOTL_DB::set_meta( $code, 'delivered_at', $delivered_date );
-            $notice = '<div class="notice notice-success is-dismissible"><p>Actual delivery date updated.</p></div>';
+            $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Actual delivery date updated.', 'wc-order-timeline' ) . '</p></div>';
         }
 
         // Save step void reason
@@ -271,12 +271,12 @@ class WCOTL_Admin {
                 wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
             }
             $step_id     = absint( $_POST['step_id'] );
-            $void_reason = sanitize_textarea_field( wp_unslash( $_POST['step_void_reason'] ?? '' ));
+            $void_reason = sanitize_textarea_field( wp_unslash( $_POST['step_void_reason'] ?? '' ) );
             $wpdb->update( $table, [
                 'step_voided'      => 1,
                 'step_void_reason' => $void_reason,
             ], [ 'id' => $step_id ] );
-            $notice = '<div class="notice notice-success is-dismissible"><p>Step marked as unconfirmed.</p></div>';
+            $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Step marked as unconfirmed.', 'wc-order-timeline' ) . '</p></div>';
         }
 
         // Restore voided step
@@ -288,7 +288,7 @@ class WCOTL_Admin {
             }
             $step_id = absint( $_GET['step_id'] );
             $wpdb->update( $table, [ 'step_voided' => 0, 'step_void_reason' => null ], [ 'id' => $step_id ] );
-            $notice = '<div class="notice notice-success is-dismissible"><p>Step restored.</p></div>';
+            $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Step restored.', 'wc-order-timeline' ) . '</p></div>';
         }
 
         // Edit step
@@ -297,10 +297,10 @@ class WCOTL_Admin {
                 wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
             }
             $step_id = absint( $_POST['step_id'] );
-            $label   = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ));
-            $note    = sanitize_textarea_field( wp_unslash($_POST['step_note'] ?? ''));
-            $date    = sanitize_text_field( wp_unslash( $_POST['step_date'] ?? '' ));
-            $icon    = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ));
+            $label   = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ) );
+            $note    = sanitize_textarea_field( wp_unslash( $_POST['step_note'] ?? '' ) );
+            $date    = sanitize_text_field( wp_unslash( $_POST['step_date'] ?? '' ) );
+            $icon    = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ) );
 
             if ( $label && $date ) {
                 $dt = DateTime::createFromFormat( 'Y-m-d\TH:i', $date );
@@ -311,9 +311,9 @@ class WCOTL_Admin {
                     'step_note'  => $note,
                     'step_icon'  => $icon,
                 ], [ 'id' => $step_id ] );
-                $notice = '<div class="notice notice-success is-dismissible"><p>Step updated successfully!</p></div>';
+                $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Step updated successfully!', 'wc-order-timeline' ) . '</p></div>';
             } else {
-                $notice = '<div class="notice notice-error is-dismissible"><p>Please fill in at least Date/Time and Description.</p></div>';
+                $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please fill in at least Date/Time and Description.', 'wc-order-timeline' ) . '</p></div>';
             }
         }
 
@@ -331,7 +331,7 @@ class WCOTL_Admin {
                 WCOTL_DB::set_meta( $code, 'order_id', '' );
                 $wpdb->update( $table, [ 'order_id' => 0 ], [ 'tracking_code' => $code ] );
             }
-            $notice = '<div class="notice notice-success is-dismissible"><p>Order updated.</p></div>';
+            $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Order updated.', 'wc-order-timeline' ) . '</p></div>';
         }
 
         // Save new step
@@ -339,10 +339,10 @@ class WCOTL_Admin {
             if ( ! current_user_can( 'manage_woocommerce' ) ) {
                 wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
             }
-            $label = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ));
-            $note  = sanitize_textarea_field( wp_unslash( $_POST['step_note'] ?? '' ));
-            $date  = sanitize_text_field( wp_unslash( $_POST['step_date'] ?? '' ));
-            $icon  = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ));
+            $label = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ) );
+            $note  = sanitize_textarea_field( wp_unslash( $_POST['step_note'] ?? '' ) );
+            $date  = sanitize_text_field( wp_unslash( $_POST['step_date'] ?? '' ) );
+            $icon  = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ) );
 
             if ( $label && $date ) {
                 $dt = DateTime::createFromFormat( 'Y-m-d\TH:i', $date );
@@ -358,9 +358,9 @@ class WCOTL_Admin {
                     'step_note'     => $note,
                     'step_icon'     => $icon,
                 ] );
-                $notice = '<div class="notice notice-success is-dismissible"><p>Step added successfully!</p></div>';
+                $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Step added successfully!', 'wc-order-timeline' ) . '</p></div>';
             } else {
-                $notice = '<div class="notice notice-error is-dismissible"><p>Please fill in at least Date/Time and Description.</p></div>';
+                $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please fill in at least Date/Time and Description.', 'wc-order-timeline' ) . '</p></div>';
             }
         }
 
@@ -927,9 +927,9 @@ class WCOTL_Admin {
                                     <textarea name="step_void_reason" placeholder="e.g. Incorrect information provided by carrier. Shipment is still in transit."><?php echo esc_textarea( $s->step_void_reason ?? '' ); ?></textarea>
                                 </div>
                                 <div style="display:flex;gap:8px;">
-                                    <button type="submit" class="button button-link-delete button-small">Confirm cancelation</button>
+                                    <button type="submit" class="button button-link-delete button-small"><?php esc_html_e( 'Confirm cancellation', 'wc-order-timeline' ); ?></button>
                                     <button type="button" class="button button-secondary button-small"
-                                            onclick="wcotlToggleVoid(<?php echo $s->id; ?>)">Cancel</button>
+                                            onclick="wcotlToggleVoid(<?php echo $s->id; ?>)"><?php esc_html_e( 'Cancel', 'wc-order-timeline' ); ?></button>
                                 </div>
                             </form>
                         </div>
@@ -1049,7 +1049,7 @@ class WCOTL_Admin {
                 wp_redirect( admin_url('admin.php?page=wcotl-tracking&view=' . urlencode($code) ) );
                 exit;
             } else {
-                $notice = '<div class="notice notice-error is-dismissible"><p>Please enter a valid code (minimum 3 characters, letters, numbers, hyphens only).</p></div>';
+                $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please enter a valid code (minimum 3 characters, letters, numbers, hyphens only).', 'wc-order-timeline' ) . '</p></div>';
             }
         }
 
