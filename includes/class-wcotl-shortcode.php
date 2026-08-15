@@ -37,10 +37,10 @@ public static function render() {
     $estimated_delivery = ( $code !== '' ) ? WCOTL_DB::get_meta( $code, 'estimated_delivery' ) : null;
     $delivered_at       = ( $code !== '' ) ? WCOTL_DB::get_meta( $code, 'delivered_at' )       : null;
 
-    // Icone SVG inline per i tipi comuni
+    // SVG icon map
     $icons = WCOTL_Icons::map();
     ?>
-    <!– ——— STILI ——— –>
+    <!-- Styles -->
     <style>
     :root {
         --otl-bg:        #ffffff;
