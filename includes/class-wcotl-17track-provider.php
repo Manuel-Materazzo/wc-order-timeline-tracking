@@ -256,6 +256,9 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
         if ( empty( $raw ) ) return null;
         try {
             $dt = new DateTime( $raw );
+            if ( function_exists( 'wp_timezone' ) ) {
+                $dt->setTimezone( wp_timezone() );
+            }
             return $dt->format( 'Y-m-d H:i:s' );
         } catch ( Exception $e ) {
             return null;
