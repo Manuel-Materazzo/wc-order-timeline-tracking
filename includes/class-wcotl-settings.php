@@ -24,6 +24,10 @@ class WCOTL_Settings {
         add_action( 'wp_ajax_wcotl_save_auto_tracking', [ __CLASS__, 'ajax_save_auto_tracking' ] );
         // AJAX: resume stopped sync
         add_action( 'wp_ajax_wcotl_resume_sync', [ __CLASS__, 'ajax_resume_sync' ] );
+        // AJAX: update delete data preference on uninstall
+        add_action( 'wp_ajax_wcotl_set_uninstall_data_preference', [ __CLASS__, 'ajax_set_uninstall_data_preference' ] );
+        // Render uninstall confirmation modal on plugins list screen
+        add_action( 'admin_footer', [ __CLASS__, 'render_plugins_uninstall_modal' ] );
     }
 
     /* ------------------------------------------------------------------
@@ -46,9 +50,10 @@ class WCOTL_Settings {
      * ------------------------------------------------------------------ */
 
     public static function register_settings() {
-        register_setting( 'wcotl_settings_group', 'wcotl_17track_api_key',  'sanitize_text_field' );
-        register_setting( 'wcotl_settings_group', 'wcotl_sync_interval',    'absint' );
-        register_setting( 'wcotl_settings_group', 'wcotl_inactivity_days',  'absint' );
+        register_setting( 'wcotl_settings_group', 'wcotl_17track_api_key',           'sanitize_text_field' );
+        register_setting( 'wcotl_settings_group', 'wcotl_sync_interval',             'absint' );
+        register_setting( 'wcotl_settings_group', 'wcotl_inactivity_days',           'absint' );
+        register_setting( 'wcotl_settings_group', 'wcotl_delete_data_on_uninstall',  'absint' );
     }
 
     /* ------------------------------------------------------------------
@@ -61,14 +66,16 @@ class WCOTL_Settings {
         }
         check_admin_referer( 'wcotl_settings_nonce' );
 
-        $api_key  = sanitize_text_field( wp_unslash( $_POST['wcotl_17track_api_key'] ?? '' ) );
-        $interval = max( 1, absint( $_POST['wcotl_sync_interval'] ?? 1 ) );
-        $inactive = max( 1, absint( $_POST['wcotl_inactivity_days'] ?? 45 ) );
+        $api_key     = sanitize_text_field( wp_unslash( $_POST['wcotl_17track_api_key'] ?? '' ) );
+        $interval    = max( 1, absint( $_POST['wcotl_sync_interval'] ?? 1 ) );
+        $inactive    = max( 1, absint( $_POST['wcotl_inactivity_days'] ?? 45 ) );
+        $delete_data = ! empty( $_POST['wcotl_delete_data_on_uninstall'] ) ? 1 : 0;
 
         $old_interval = (int) get_option( 'wcotl_sync_interval', 1 );
 
-        update_option( 'wcotl_17track_api_key',  $api_key );
-        update_option( 'wcotl_inactivity_days',  $inactive );
+        update_option( 'wcotl_17track_api_key',          $api_key );
+        update_option( 'wcotl_inactivity_days',          $inactive );
+        update_option( 'wcotl_delete_data_on_uninstall', $delete_data );
 
         // update_option triggers the reschedule hook if interval changed.
         update_option( 'wcotl_sync_interval', $interval );
@@ -179,11 +186,12 @@ class WCOTL_Settings {
      * ------------------------------------------------------------------ */
 
     public static function page() {
-        $api_key         = get_option( 'wcotl_17track_api_key', '' );
-        $sync_interval   = max( 1, (int) get_option( 'wcotl_sync_interval', 1 ) );
-        $inactivity_days = max( 1, (int) get_option( 'wcotl_inactivity_days', 45 ) );
-        $saved           = isset( $_GET['saved'] );
-        $next_sync       = wp_next_scheduled( WCOTL_Auto_Sync::CRON_HOOK );
+        $api_key                   = get_option( 'wcotl_17track_api_key', '' );
+        $sync_interval             = max( 1, (int) get_option( 'wcotl_sync_interval', 1 ) );
+        $inactivity_days           = max( 1, (int) get_option( 'wcotl_inactivity_days', 45 ) );
+        $delete_data_on_uninstall = (int) get_option( 'wcotl_delete_data_on_uninstall', 0 );
+        $saved                     = isset( $_GET['saved'] );
+        $next_sync                 = wp_next_scheduled( WCOTL_Auto_Sync::CRON_HOOK );
 
         // Test provider connectivity if key is set.
         $provider_ok = false;
@@ -257,7 +265,22 @@ class WCOTL_Settings {
                         </small>
                     </div>
 
-                    <button type="submit" class="button button-primary">
+                    <div class="wcotl-form-row" style="margin-top:20px;padding-top:16px;border-top:1px solid #e0e0e0;">
+                        <label style="font-weight:600;display:block;margin-bottom:8px;">
+                            Data Retention &amp; Uninstall
+                        </label>
+                        <label style="font-weight:normal;display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+                            <input type="checkbox" name="wcotl_delete_data_on_uninstall" value="1" <?php checked( $delete_data_on_uninstall, 1 ); ?> style="margin-top:2px;">
+                            <span>
+                                <strong>Erase all data upon uninstall</strong>
+                                <span style="font-size:12px;color:#646970;display:block;margin-top:2px;line-height:1.4;">
+                                    If enabled, all database tables (<code>order_timeline</code>, <code>order_timeline_meta</code>, <code>order_timeline_presets</code>) and settings will be permanently dropped when deleting the plugin. If unchecked (default), all data and configurations are retained.
+                                </span>
+                            </span>
+                        </label>
+                    </div>
+
+                    <button type="submit" class="button button-primary" style="margin-top:16px;">
                         Save Settings
                     </button>
                 </form>
@@ -278,4 +301,150 @@ class WCOTL_Settings {
         </div>
         <?php
     }
+
+    /* ------------------------------------------------------------------
+     * AJAX: update delete data preference on uninstall
+     * ------------------------------------------------------------------ */
+
+    public static function ajax_set_uninstall_data_preference() {
+        check_ajax_referer( 'wcotl_uninstall_nonce', 'nonce' );
+        if ( ! current_user_can( 'delete_plugins' ) && ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( 'Not allowed.' );
+        }
+
+        $delete_data = ! empty( $_POST['delete_data'] ) ? 1 : 0;
+        update_option( 'wcotl_delete_data_on_uninstall', $delete_data );
+
+        wp_send_json_success( [ 'delete_data' => $delete_data ] );
+    }
+
+    /* ------------------------------------------------------------------
+     * Modal on plugins.php when user clicks "Delete"
+     * ------------------------------------------------------------------ */
+
+    public static function render_plugins_uninstall_modal() {
+        global $pagenow;
+        if ( $pagenow !== 'plugins.php' ) {
+            return;
+        }
+        if ( ! current_user_can( 'delete_plugins' ) ) {
+            return;
+        }
+
+        $delete_data_on_uninstall = (int) get_option( 'wcotl_delete_data_on_uninstall', 0 );
+        $plugin_basename = plugin_basename( WCOTL_PLUGIN_FILE );
+        $plugin_slug     = dirname( $plugin_basename );
+        ?>
+        <div id="wcotl-uninstall-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);z-index:999999;align-items:center;justify-content:center;backdrop-filter:blur(2px);">
+            <div style="background:#fff;border-radius:8px;width:520px;max-width:92%;box-shadow:0 12px 30px rgba(0,0,0,0.25);overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen-Sans,Ubuntu,Cantarell,'Helvetica Neue',sans-serif;">
+                <div style="padding:16px 20px;border-bottom:1px solid #e2e4e7;display:flex;align-items:center;justify-content:space-between;background:#fcfcfc;">
+                    <h3 style="margin:0;font-size:16px;font-weight:600;color:#1d2327;display:flex;align-items:center;gap:8px;">
+                        <span class="dashicons dashicons-trash" style="color:#d63638;"></span>
+                        <?php esc_html_e( 'Uninstall WC Order Timeline Tracking', 'wc-order-timeline' ); ?>
+                    </h3>
+                    <button type="button" id="wcotl-uninstall-close-btn" style="background:none;border:none;cursor:pointer;font-size:20px;line-height:1;color:#787c82;">&times;</button>
+                </div>
+                <div style="padding:20px;font-size:13px;color:#3c434a;line-height:1.5;">
+                    <p style="margin-top:0;margin-bottom:14px;">
+                        <?php esc_html_e( 'You are about to delete the plugin. Please choose how you want to handle existing timeline tracking data:', 'wc-order-timeline' ); ?>
+                    </p>
+
+                    <div style="background:#f9f9f9;border:1px solid #e2e4e7;border-radius:6px;padding:14px;margin-bottom:12px;">
+                        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0;">
+                            <input type="checkbox" id="wcotl-uninstall-delete-data" name="wcotl_delete_data_on_uninstall" value="1" <?php checked( $delete_data_on_uninstall, 1 ); ?> style="margin-top:2px;">
+                            <span>
+                                <strong style="color:#1d2327;display:block;margin-bottom:3px;">
+                                    <?php esc_html_e( 'Erase all plugin database tables and settings', 'wc-order-timeline' ); ?>
+                                </strong>
+                                <span style="font-size:12px;color:#646970;display:block;line-height:1.4;">
+                                    <?php esc_html_e( 'Permanently delete all order timeline records, custom steps, metadata, presets, and configuration options. If unchecked, all data is retained safely.', 'wc-order-timeline' ); ?>
+                                </span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+                <div style="padding:14px 20px;border-top:1px solid #e2e4e7;background:#f6f7f7;display:flex;justify-content:flex-end;gap:10px;">
+                    <button type="button" id="wcotl-uninstall-cancel-btn" class="button">
+                        <?php esc_html_e( 'Cancel', 'wc-order-timeline' ); ?>
+                    </button>
+                    <button type="button" id="wcotl-uninstall-confirm-btn" class="button button-primary">
+                        <?php esc_html_e( 'Proceed with Deletion', 'wc-order-timeline' ); ?>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        (function() {
+            var modal = document.getElementById('wcotl-uninstall-modal');
+            if (!modal) return;
+
+            var checkbox   = document.getElementById('wcotl-uninstall-delete-data');
+            var confirmBtn = document.getElementById('wcotl-uninstall-confirm-btn');
+            var cancelBtn  = document.getElementById('wcotl-uninstall-cancel-btn');
+            var closeBtn   = document.getElementById('wcotl-uninstall-close-btn');
+            var targetUrl  = '';
+
+            function openModal(url) {
+                targetUrl = url;
+                modal.style.display = 'flex';
+            }
+
+            function closeModal() {
+                modal.style.display = 'none';
+                targetUrl = '';
+            }
+
+            cancelBtn.addEventListener('click', closeModal);
+            closeBtn.addEventListener('click', closeModal);
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) closeModal();
+            });
+
+            document.addEventListener('click', function(e) {
+                var link = e.target.closest('a');
+                if (!link) return;
+                var href = link.getAttribute('href') || '';
+
+                var pluginBasename = <?php echo json_encode( $plugin_basename ); ?>;
+                var pluginSlug     = <?php echo json_encode( $plugin_slug ); ?>;
+
+                var isDeleteAction = (
+                    (href.indexOf('action=delete-selected') !== -1 && (href.indexOf(encodeURIComponent(pluginBasename)) !== -1 || href.indexOf(pluginBasename) !== -1 || href.indexOf(pluginSlug) !== -1)) ||
+                    (link.closest('tr[data-plugin="' + pluginBasename + '"]') && link.closest('span.delete')) ||
+                    (link.closest('tr[data-slug="' + pluginSlug + '"]') && link.closest('span.delete'))
+                );
+
+                if (isDeleteAction) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openModal(link.href);
+                }
+            }, true);
+
+            confirmBtn.addEventListener('click', function() {
+                var deleteData = checkbox.checked ? 1 : 0;
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = <?php echo json_encode( __( 'Saving preference...', 'wc-order-timeline' ) ); ?>;
+
+                var params = new URLSearchParams();
+                params.append('action', 'wcotl_set_uninstall_data_preference');
+                params.append('nonce', <?php echo json_encode( wp_create_nonce( 'wcotl_uninstall_nonce' ) ); ?>);
+                params.append('delete_data', deleteData);
+
+                fetch(ajaxurl, {
+                    method: 'POST',
+                    body: params,
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' }
+                }).then(function() {
+                    window.location.href = targetUrl;
+                }).catch(function() {
+                    window.location.href = targetUrl;
+                });
+            });
+        })();
+        </script>
+        <?php
+    }
 }
+
