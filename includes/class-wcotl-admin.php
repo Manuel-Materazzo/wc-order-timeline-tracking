@@ -611,7 +611,8 @@ class WCOTL_Admin {
                         msg.style.color = '#888';
                         msg.textContent = '';
                         document.getElementById('wcotl-manual-carrier-row').style.display = 'block';
-                        document.getElementById('wcotl-manual-carrier-code').focus();
+                        var searchBox = document.getElementById('wcotl-carrier-search');
+                        if (searchBox) searchBox.focus();
                     } else {
                         for (var code in carriers) {
                             var opt = document.createElement('option');
