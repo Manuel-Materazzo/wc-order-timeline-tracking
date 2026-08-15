@@ -222,10 +222,13 @@ class WCOTL_Settings {
                                 <span style="color:#008a20;font-size:11px;margin-left:6px;">✓ Configured</span>
                             <?php endif; ?>
                         </label>
-                        <input type="text" name="wcotl_17track_api_key"
-                               value="<?php echo esc_attr( $api_key ); ?>"
-                               placeholder="Paste your API key here"
-                               style="font-family:monospace;">
+                        <div style="display:flex;gap:6px;">
+                            <input type="password" id="wcotl_api_key_field" name="wcotl_17track_api_key"
+                                   value="<?php echo esc_attr( $api_key ); ?>"
+                                   placeholder="Paste your API key here"
+                                   style="font-family:monospace;flex:1;">
+                            <button type="button" class="button" onclick="var f = document.getElementById('wcotl_api_key_field'); f.type = f.type === 'password' ? 'text' : 'password'; this.textContent = f.type === 'password' ? 'Show' : 'Hide';">Show</button>
+                        </div>
                         <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
                             Leave empty to disable auto-tracking.
                         </small>
