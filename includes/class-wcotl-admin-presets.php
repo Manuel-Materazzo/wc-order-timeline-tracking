@@ -213,6 +213,7 @@ class WCOTL_Admin_Presets {
     }
 
     public static function ajax_get_presets_json() {
+        check_ajax_referer( 'wcotl_admin_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_woocommerce' ) ) wp_die( 'Forbidden', 403 );
         $presets = WCOTL_DB::get_presets();
         wp_send_json_success( $presets );
