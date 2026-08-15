@@ -38,9 +38,6 @@ class WCOTL_Admin_Presets {
             $icon  = sanitize_key( $_POST['step_icon'] ?? 'truck' );
             $order = absint( $_POST['sort_order'] ?? 0 );
             if ( $name && $label ) {
-                $wpdb->update( $t, compact( 'name', 'label', 'note', 'icon', 'order' ), [ 'id' => $pid ],
-                    [ '%s','%s','%s','%s','%d' ], [ '%d' ] );
-                // use correct column names
                 $wpdb->update( $t, [
                     'preset_name' => $name,
                     'step_label'  => $label,
