@@ -105,6 +105,9 @@ class WCOTL_Admin {
             $_GET['action'] === 'delete_step' &&
             wp_verify_nonce( $_GET['_wpnonce'], 'wcotl_delete_step' )
         ) {
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+            }
             $wpdb->delete( $table, [ 'id' => absint( $_GET['step_id'] ) ] );
             echo '<div class="notice notice-success is-dismissible"><p>Step deleted.</p></div>';
         }
@@ -115,6 +118,9 @@ class WCOTL_Admin {
             in_array( $_GET['action'], [ 'void_step', 'unvoid_step' ], true ) &&
             wp_verify_nonce( $_GET['_wpnonce'], 'wcotl_void_step_' . absint( $_GET['step_id'] ) )
         ) {
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+            }
             $step_id = absint( $_GET['step_id'] );
             if ( $_GET['action'] === 'void_step' ) {
                 $wpdb->update( $table, [ 'step_voided' => 1 ], [ 'id' => $step_id ] );
@@ -130,6 +136,9 @@ class WCOTL_Admin {
             isset( $_POST['wcotl_edit_step'], $_POST['_wpnonce_edit'], $_POST['step_id'] ) &&
             wp_verify_nonce( $_POST['_wpnonce_edit'], 'wcotl_edit_step_' . absint( $_POST['step_id'] ) )
         ) {
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+            }
             $step_id = absint( $_POST['step_id'] );
             $label   = sanitize_text_field( $_POST['step_label'] ?? '' );
             $note    = sanitize_textarea_field( $_POST['step_note'] ?? '' );
@@ -157,6 +166,9 @@ class WCOTL_Admin {
             $_GET['action'] === 'delete_code' &&
             wp_verify_nonce( $_GET['_wpnonce'], 'wcotl_delete_code' )
         ) {
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+            }
             $wpdb->delete( $table, [ 'tracking_code' => sanitize_text_field( $_GET['tracking_code'] ) ] );
             echo '<div class="notice notice-success is-dismissible"><p>Code deleted.</p></div>';
         }
@@ -233,20 +245,29 @@ class WCOTL_Admin {
 
         // Save estimated delivery date
         if ( isset( $_POST['wcotl_save_delivery'], $_POST['_wpnonce_delivery'] ) && wp_verify_nonce( $_POST['_wpnonce_delivery'], 'wcotl_save_delivery_' . $code ) ) {
-            $delivery_date = sanitize_text_field( $_POST['estimated_delivery'] ?? '' );
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+            }
+            $delivery_date = sanitize_text_field( wp_unslash( $_POST['estimated_delivery'] ?? '' ) );
             WCOTL_DB::set_meta( $code, 'estimated_delivery', $delivery_date );
             $notice = '<div class="notice notice-success is-dismissible"><p>Estimated delivery date updated.</p></div>';
         }
 
         // Save actual delivery date
         if ( isset( $_POST['wcotl_save_delivered'], $_POST['_wpnonce_delivered'] ) && wp_verify_nonce( $_POST['_wpnonce_delivered'], 'wcotl_save_delivered_' . $code ) ) {
-            $delivered_date = sanitize_text_field( $_POST['delivered_at'] ?? '' );
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+            }
+            $delivered_date = sanitize_text_field( wp_unslash( $_POST['delivered_at'] ?? '' ) );
             WCOTL_DB::set_meta( $code, 'delivered_at', $delivered_date );
             $notice = '<div class="notice notice-success is-dismissible"><p>Actual delivery date updated.</p></div>';
         }
 
         // Save step void reason
         if ( isset( $_POST['wcotl_save_void_reason'], $_POST['_wpnonce_void'], $_POST['step_id'] ) && wp_verify_nonce( $_POST['_wpnonce_void'], 'wcotl_void_reason_' . absint( $_POST['step_id'] ) ) ) {
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+            }
             $step_id     = absint( $_POST['step_id'] );
             $void_reason = sanitize_textarea_field( wp_unslash( $_POST['step_void_reason'] ?? '' ));
             $wpdb->update( $table, [
@@ -260,6 +281,9 @@ class WCOTL_Admin {
         if ( isset( $_GET['action'], $_GET['step_id'], $_GET['_wpnonce'] ) &&
             $_GET['action'] === 'unvoid_step' &&
             wp_verify_nonce( $_GET['_wpnonce'], 'wcotl_void_step_' . absint( $_GET['step_id'] ) ) ) {
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+            }
             $step_id = absint( $_GET['step_id'] );
             $wpdb->update( $table, [ 'step_voided' => 0, 'step_void_reason' => null ], [ 'id' => $step_id ] );
             $notice = '<div class="notice notice-success is-dismissible"><p>Step restored.</p></div>';
@@ -267,6 +291,9 @@ class WCOTL_Admin {
 
         // Edit step
         if ( isset( $_POST['wcotl_edit_step'], $_POST['_wpnonce_edit'], $_POST['step_id'] ) && wp_verify_nonce( $_POST['_wpnonce_edit'], 'wcotl_edit_step_' . absint( $_POST['step_id'] ) ) ) {
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+            }
             $step_id = absint( $_POST['step_id'] );
             $label   = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ));
             $note    = sanitize_textarea_field( wp_unslash($_POST['step_note'] ?? ''));
@@ -290,6 +317,9 @@ class WCOTL_Admin {
 
         // Update WooCommerce order associated with code
         if ( isset( $_POST['wcotl_save_order_id'], $_POST['_wpnonce_order_id'] ) && wp_verify_nonce( $_POST['_wpnonce_order_id'], 'wcotl_save_order_id_' . $code ) ) {
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+            }
             $new_order_id = absint( $_POST['order_id'] ?? 0 );
             if ( $new_order_id ) {
                 WCOTL_DB::set_meta( $code, 'order_id', $new_order_id );
@@ -304,6 +334,9 @@ class WCOTL_Admin {
 
         // Save new step
         if ( isset( $_POST['wcotl_add_step'], $_POST['_wpnonce'] ) && wp_verify_nonce( $_POST['_wpnonce'], 'wcotl_add_step' ) ) {
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+            }
             $label = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ));
             $note  = sanitize_textarea_field( wp_unslash( $_POST['step_note'] ?? '' ));
             $date  = sanitize_text_field( wp_unslash( $_POST['step_date'] ?? '' ));
@@ -999,7 +1032,10 @@ class WCOTL_Admin {
         $notice = '';
 
         if ( isset( $_POST['wcotl_create_code'], $_POST['_wpnonce'] ) && wp_verify_nonce( $_POST['_wpnonce'], 'wcotl_create_code' ) ) {
-            $code = strtoupper( sanitize_text_field( $_POST['tracking_code'] ?? '' ) );
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+            }
+            $code = strtoupper( sanitize_text_field( wp_unslash( $_POST['tracking_code'] ?? '' ) ) );
             $code = preg_replace('/[^A-Z0-9\-_]/', '', $code);
 
             if ( strlen($code) >= 3 ) {
