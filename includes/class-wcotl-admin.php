@@ -404,7 +404,10 @@ class WCOTL_Admin {
     		<h2 style="margin:0;">
     			Code: 
     			<span class="wcotl-code-badge">
-    				<a target="_blank" href="<?php echo esc_url( add_query_arg( 'tracking', $code, home_url( '/order-tracking/' ) ) ); ?>">
+    				<?php
+    				$tracking_page_url = apply_filters( 'wcotl_tracking_page_url', home_url( '/order-tracking/' ), $code );
+    				?>
+    				<a target="_blank" href="<?php echo esc_url( add_query_arg( 'tracking', $code, $tracking_page_url ) ); ?>">
     					<?php echo esc_html($code); ?>
     				</a>
     			</span>
