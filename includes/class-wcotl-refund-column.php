@@ -9,9 +9,74 @@ class WCOTL_Refund_Column {
     public static function init() {
         add_filter( 'manage_edit-shop_order_columns', array( __CLASS__, 'add_column_cpt' ), 20 );
         add_action( 'manage_shop_order_posts_custom_column', array( __CLASS__, 'render_column_cpt' ), 10, 2 );
+        add_filter( 'the_posts', array( __CLASS__, 'prime_orders_cache_cpt' ), 10, 2 );
+
         add_filter( 'woocommerce_shop_order_list_table_columns', array( __CLASS__, 'add_column_hpos' ), 20 );
         add_action( 'woocommerce_shop_order_list_table_custom_column', array( __CLASS__, 'render_column_hpos' ), 10, 2 );
+        add_filter( 'woocommerce_shop_order_list_table_orders', array( __CLASS__, 'prime_orders_cache_hpos' ), 10, 1 );
+
         add_action( 'admin_head', array( __CLASS__, 'column_styles' ) );
+    }
+
+    /**
+     * Prime delivered_at cache for CPT order list queries in bulk.
+     *
+     * @param array $posts
+     * @param WP_Query|null $query
+     * @return array
+     */
+    public static function prime_orders_cache_cpt( $posts, $query = null ) {
+        if ( ! is_admin() || empty( $posts ) || ! is_array( $posts ) ) {
+            return $posts;
+        }
+
+        if ( $query instanceof WP_Query && $query->is_main_query() ) {
+            $post_type = $query->get( 'post_type' );
+            if ( $post_type === 'shop_order' || ( is_array( $post_type ) && in_array( 'shop_order', $post_type, true ) ) ) {
+                $order_ids = array();
+                foreach ( $posts as $post ) {
+                    if ( is_object( $post ) && isset( $post->ID ) ) {
+                        $order_ids[] = (int) $post->ID;
+                    } elseif ( is_numeric( $post ) ) {
+                        $order_ids[] = (int) $post;
+                    }
+                }
+                if ( ! empty( $order_ids ) ) {
+                    WCOTL_DB::prime_delivered_at_cache( $order_ids );
+                }
+            }
+        }
+
+        return $posts;
+    }
+
+    /**
+     * Prime delivered_at cache for HPOS order list table in bulk.
+     *
+     * @param array $orders
+     * @return array
+     */
+    public static function prime_orders_cache_hpos( $orders ) {
+        if ( empty( $orders ) || ! is_array( $orders ) ) {
+            return $orders;
+        }
+
+        $order_ids = array();
+        foreach ( $orders as $order ) {
+            if ( is_a( $order, 'WC_Order' ) ) {
+                $order_ids[] = (int) $order->get_id();
+            } elseif ( is_numeric( $order ) ) {
+                $order_ids[] = (int) $order;
+            } elseif ( is_object( $order ) && isset( $order->ID ) ) {
+                $order_ids[] = (int) $order->ID;
+            }
+        }
+
+        if ( ! empty( $order_ids ) ) {
+            WCOTL_DB::prime_delivered_at_cache( $order_ids );
+        }
+
+        return $orders;
     }
 
     public static function add_column_cpt( $columns ) {

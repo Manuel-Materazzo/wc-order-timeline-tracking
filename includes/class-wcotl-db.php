@@ -6,6 +6,13 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 class WCOTL_DB {
 
+    /**
+     * In-memory cache for delivered_at timestamps indexed by order_id.
+     *
+     * @var array<int, string|false>
+     */
+    private static $delivered_at_cache = array();
+
     public static function init() {
         add_action( 'admin_init', array( __CLASS__, 'maybe_upgrade' ) );
     }
@@ -113,6 +120,70 @@ class WCOTL_DB {
                 'meta_value'    => $value,
             ] );
         }
+
+        if ( $key === 'delivered_at' ) {
+            self::clear_delivered_at_cache();
+        }
+    }
+
+    public static function clear_delivered_at_cache( $order_id = null ) {
+        if ( null === $order_id ) {
+            self::$delivered_at_cache = array();
+        } else {
+            unset( self::$delivered_at_cache[ absint( $order_id ) ] );
+        }
+    }
+
+    public static function prime_delivered_at_cache( $order_ids ) {
+        if ( empty( $order_ids ) || ! is_array( $order_ids ) ) {
+            return;
+        }
+
+        $clean_ids = array();
+        foreach ( $order_ids as $id ) {
+            $id = absint( $id );
+            if ( $id > 0 && ! array_key_exists( $id, self::$delivered_at_cache ) ) {
+                $clean_ids[ $id ] = $id;
+            }
+        }
+
+        if ( empty( $clean_ids ) ) {
+            return;
+        }
+
+        global $wpdb;
+        $timeline = $wpdb->prefix . 'order_timeline';
+        $meta     = $wpdb->prefix . 'order_timeline_meta';
+
+        $placeholders = implode( ',', array_fill( 0, count( $clean_ids ), '%d' ) );
+        $query        = $wpdb->prepare(
+            "SELECT t.order_id, m.meta_value
+             FROM {$meta} m
+             INNER JOIN {$timeline} t ON t.tracking_code = m.tracking_code
+             WHERE t.order_id IN ({$placeholders})
+               AND m.meta_key   = 'delivered_at'
+               AND m.meta_value != ''
+             ORDER BY m.meta_value DESC",
+            array_values( $clean_ids )
+        );
+
+        $results = $wpdb->get_results( $query );
+
+        // Initialize all requested IDs as false (not found)
+        foreach ( $clean_ids as $id ) {
+            self::$delivered_at_cache[ $id ] = false;
+        }
+
+        // Populate with the latest delivered_at date found for each order
+        if ( ! empty( $results ) ) {
+            foreach ( $results as $row ) {
+                $oid = (int) $row->order_id;
+                // First match is the latest because of ORDER BY m.meta_value DESC
+                if ( isset( self::$delivered_at_cache[ $oid ] ) && self::$delivered_at_cache[ $oid ] === false ) {
+                    self::$delivered_at_cache[ $oid ] = $row->meta_value;
+                }
+            }
+        }
     }
 
     public static function get_presets() {
@@ -122,23 +193,18 @@ class WCOTL_DB {
     }
 
     public static function get_delivered_at_for_order( $order_id ) {
-        global $wpdb;
-        $timeline = $wpdb->prefix . 'order_timeline';
-        $meta     = $wpdb->prefix . 'order_timeline_meta';
+        $order_id = absint( $order_id );
+        if ( ! $order_id ) {
+            return null;
+        }
 
-        return $wpdb->get_var(
-            $wpdb->prepare(
-                "SELECT m.meta_value
-                 FROM {$meta} m
-                 INNER JOIN {$timeline} t ON t.tracking_code = m.tracking_code
-                 WHERE t.order_id = %d
-                   AND m.meta_key   = 'delivered_at'
-                   AND m.meta_value != ''
-                 ORDER BY m.meta_value DESC
-                 LIMIT 1",
-                $order_id
-            )
-        );
+        if ( array_key_exists( $order_id, self::$delivered_at_cache ) ) {
+            return self::$delivered_at_cache[ $order_id ] ? self::$delivered_at_cache[ $order_id ] : null;
+        }
+
+        self::prime_delivered_at_cache( array( $order_id ) );
+
+        return self::$delivered_at_cache[ $order_id ] ? self::$delivered_at_cache[ $order_id ] : null;
     }
 
 }
