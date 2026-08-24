@@ -1074,12 +1074,19 @@ class WCOTL_Admin {
             $code = preg_replace('/[^A-Z0-9\-_]/', '', $code);
 
             if ( strlen($code) >= 3 ) {
-                $order_id_from_post = absint( $_POST['order_id'] ?? 0 );
-                if ( $order_id_from_post ) {
-                    WCOTL_DB::set_meta( $code, 'order_id', $order_id_from_post );
+                global $wpdb;
+                $table  = $wpdb->prefix . 'order_timeline';
+                $exists = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE tracking_code = %s LIMIT 1", $code ) );
+                if ( $exists ) {
+                    $notice = '<div class="notice notice-error is-dismissible"><p>' . sprintf( esc_html__( 'Tracking code "%s" already exists. Please choose a different code.', 'wc-order-timeline' ), esc_html( $code ) ) . '</p></div>';
+                } else {
+                    $order_id_from_post = absint( $_POST['order_id'] ?? 0 );
+                    if ( $order_id_from_post ) {
+                        WCOTL_DB::set_meta( $code, 'order_id', $order_id_from_post );
+                    }
+                    wp_redirect( admin_url('admin.php?page=wcotl-tracking&view=' . urlencode($code) ) );
+                    exit;
                 }
-                wp_redirect( admin_url('admin.php?page=wcotl-tracking&view=' . urlencode($code) ) );
-                exit;
             } else {
                 $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please enter a valid code (minimum 3 characters, letters, numbers, hyphens only).', 'wc-order-timeline' ) . '</p></div>';
             }
