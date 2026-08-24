@@ -195,15 +195,41 @@ class WCOTL_Auto_Sync {
 
     /**
      * Sync a single tracking code.
+     *
+     * Returns a result array describing what happened:
+     *   [ 'step' => string, 'error' => string|null, 'status' => string|null, 'events_added' => int ]
+     *
+     * Possible 'step' values:
+     *   no_provider        – API key not set or provider not configured
+     *   no_real_number     – no carrier tracking number stored for this code
+     *   registration_failed – 17TRACK rejected the registration attempt
+     *   fetch_failed       – 17TRACK returned an error for gettrackinfo
+     *   complete           – sync ran to completion (status + events stored)
+     *
+     * @return array
      */
-    public static function sync_code( string $tracking_code, ?WCOTL_Tracking_Provider $provider = null ) {
+    public static function sync_code( string $tracking_code, ?WCOTL_Tracking_Provider $provider = null ): array {
         if ( ! $provider ) {
             $provider = self::get_provider();
-            if ( ! $provider || ! $provider->is_configured() ) return;
+            if ( ! $provider || ! $provider->is_configured() ) {
+                return [
+                    'step'  => 'no_provider',
+                    'error' => 'No 17TRACK API key configured. Check Settings → ⚙ Settings.',
+                    'status' => null,
+                    'events_added' => 0,
+                ];
+            }
         }
 
-        $real_number  = WCOTL_DB::get_meta( $tracking_code, self::META_REAL_NUMBER );
-        if ( ! $real_number ) return;
+        $real_number = WCOTL_DB::get_meta( $tracking_code, self::META_REAL_NUMBER );
+        if ( ! $real_number ) {
+            return [
+                'step'  => 'no_real_number',
+                'error' => 'No carrier tracking number is saved for this code. Enter and save one first.',
+                'status' => null,
+                'events_added' => 0,
+            ];
+        }
 
         $carrier_code = (int) ( WCOTL_DB::get_meta( $tracking_code, self::META_CARRIER_CODE ) ?: 0 );
         $registered   = WCOTL_DB::get_meta( $tracking_code, self::META_REGISTERED );
@@ -212,7 +238,13 @@ class WCOTL_Auto_Sync {
         if ( ! $registered ) {
             $reg = $provider->register_shipment( $real_number, $carrier_code ?: null );
             if ( ! $reg['success'] ) {
-                return; // Will retry on next scheduled interval.
+                self::log( "Registration failed for {$tracking_code} ({$real_number}): " . ( $reg['error'] ?? '?' ) );
+                return [
+                    'step'  => 'registration_failed',
+                    'error' => $reg['error'] ?? 'Registration rejected by 17TRACK.',
+                    'status' => null,
+                    'events_added' => 0,
+                ];
             }
             if ( $reg['carrier_code'] ) {
                 WCOTL_DB::set_meta( $tracking_code, self::META_CARRIER_CODE, $reg['carrier_code'] );
@@ -225,7 +257,13 @@ class WCOTL_Auto_Sync {
         // Fetch latest events.
         $info = $provider->get_tracking_info( $real_number, $carrier_code );
         if ( ! $info['success'] ) {
-            return;
+            self::log( "Fetch failed for {$tracking_code} ({$real_number}): " . ( $info['error'] ?? '?' ) );
+            return [
+                'step'  => 'fetch_failed',
+                'error' => $info['error'] ?? 'Could not fetch tracking info from 17TRACK.',
+                'status' => null,
+                'events_added' => 0,
+            ];
         }
 
         $status = $info['status']; // 'in_transit'|'delivered'|'expired'|'not_found'|'error'
@@ -233,29 +271,43 @@ class WCOTL_Auto_Sync {
 
         // Insert new events into the timeline.
         $last_event_date = self::insert_new_events( $tracking_code, $info['events'] );
+        $events_added    = count( $info['events'] ); // approximate; insert_new_events deduplicates
         if ( $last_event_date ) {
             WCOTL_DB::set_meta( $tracking_code, self::META_LAST_EVENT_DATE, $last_event_date );
         }
 
         // Handle terminal states.
         if ( $status === 'delivered' ) {
-            // Set the delivered_at meta from the last event date.
             $delivered_date = $last_event_date
                 ? ( new DateTime( $last_event_date ) )->format( 'Y-m-d' )
                 : current_time( 'Y-m-d' );
             WCOTL_DB::set_meta( $tracking_code, 'delivered_at', $delivered_date );
             self::stop_sync( $tracking_code, 'delivered' );
-            return;
+            return [
+                'step'   => 'complete',
+                'status' => $status,
+                'events_added' => $events_added,
+                'stopped' => true,
+                'stop_reason' => 'delivered',
+                'error'  => null,
+            ];
         }
 
         if ( $status === 'expired' ) {
             self::stop_sync( $tracking_code, 'expired' );
-            return;
+            return [
+                'step'   => 'complete',
+                'status' => $status,
+                'events_added' => $events_added,
+                'stopped' => true,
+                'stop_reason' => 'expired',
+                'error'  => null,
+            ];
         }
 
-        // Check 45-day inactivity rule.
+        // Check inactivity rule.
         $inactivity_days = (int) get_option( 'wcotl_inactivity_days', self::DEFAULT_INACTIVITY_DAYS );
-        $last_event = WCOTL_DB::get_meta( $tracking_code, self::META_LAST_EVENT_DATE );
+        $last_event      = WCOTL_DB::get_meta( $tracking_code, self::META_LAST_EVENT_DATE );
         if ( $last_event ) {
             $ts = strtotime( $last_event );
             if ( $ts !== false ) {
@@ -263,8 +315,34 @@ class WCOTL_Auto_Sync {
                 if ( $diff_days >= $inactivity_days ) {
                     self::stop_sync( $tracking_code, 'inactivity', $diff_days );
                     self::send_inactivity_email( $tracking_code, $real_number, $diff_days );
+                    return [
+                        'step'   => 'complete',
+                        'status' => $status,
+                        'events_added' => $events_added,
+                        'stopped' => true,
+                        'stop_reason' => "inactivity ({$diff_days} days)",
+                        'error'  => null,
+                    ];
                 }
             }
+        }
+
+        return [
+            'step'   => 'complete',
+            'status' => $status,
+            'events_added' => $events_added,
+            'stopped' => false,
+            'error'  => null,
+        ];
+    }
+
+    /**
+     * Write a debug message to the WP error log when WP_DEBUG_LOG is active.
+     */
+    private static function log( string $message ): void {
+        if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+            error_log( '[WCOTL Auto-Sync] ' . $message );
         }
     }
 

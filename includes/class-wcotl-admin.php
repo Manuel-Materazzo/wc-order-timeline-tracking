@@ -826,11 +826,39 @@ class WCOTL_Admin {
                         tracking_code: WCOTL_TRACKING_CODE
                     })
                 }).then(r => r.json()).then(res => {
-                    if (!res.success) { msg.style.color='#c0392b'; msg.textContent = '❌ ' + (res.data || 'Error'); if(btn)btn.disabled=false; return; }
+                    if (btn) btn.disabled = false;
+                    if (!res.success) {
+                        // Sync stopped before completing — show step + error.
+                        var d = res.data || {};
+                        var stepLabels = {
+                            no_provider:         '❌ No API key configured',
+                            no_real_number:      '❌ No carrier tracking number saved',
+                            registration_failed: '❌ 17TRACK registration failed',
+                            fetch_failed:        '❌ 17TRACK data fetch failed',
+                        };
+                        var label = stepLabels[d.step] || ('❌ Error at step: ' + (d.step || '?'));
+                        msg.style.color = '#c0392b';
+                        msg.innerHTML = '<strong>' + label + '</strong>'
+                            + (d.error ? '<br><span style="font-size:11px;">' + d.error + '</span>' : '');
+                        return;
+                    }
+                    var d = res.data || {};
                     msg.style.color = '#1e8449';
-                    msg.textContent = '✓ Sync complete! Status: ' + (res.data.status || '?');
-                    setTimeout(() => location.reload(), 1800);
-                }).catch(e => { msg.textContent = '❌ Network error.'; if(btn)btn.disabled=false; });
+                    var statusLine = d.status ? d.status : 'unknown';
+                    var eventsLine = typeof d.events_added !== 'undefined'
+                        ? ' · ' + d.events_added + ' event(s) fetched'
+                        : '';
+                    var stoppedLine = d.stopped
+                        ? ' · <em>sync stopped (' + (d.stop_reason || '') + ')</em>'
+                        : '';
+                    msg.innerHTML = '✓ Sync complete — Status: <strong>' + statusLine + '</strong>'
+                        + eventsLine + stoppedLine;
+                    setTimeout(() => location.reload(), 2500);
+                }).catch(e => {
+                    if (btn) btn.disabled = false;
+                    msg.style.color = '#c0392b';
+                    msg.textContent = '❌ Network error — could not reach the server.';
+                });
             }
 
             function wcotlResumeSync() {

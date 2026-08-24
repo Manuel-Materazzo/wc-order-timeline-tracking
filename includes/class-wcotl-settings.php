@@ -192,9 +192,18 @@ class WCOTL_Settings {
             wp_send_json_error( 'Unknown tracking code.' );
         }
 
-        WCOTL_Auto_Sync::sync_code( $tracking_code );
-        $status = WCOTL_DB::get_meta( $tracking_code, WCOTL_Auto_Sync::META_LAST_STATUS );
-        wp_send_json_success( [ 'status' => $status ] );
+        $result = WCOTL_Auto_Sync::sync_code( $tracking_code );
+
+        if ( $result['step'] !== 'complete' ) {
+            // Sync stopped before completing — surface the reason as a JSON error so the JS
+            // can show a proper diagnostic message instead of a silent "?".
+            wp_send_json_error( [
+                'step'  => $result['step'],
+                'error' => $result['error'] ?? 'Unknown error.',
+            ] );
+        }
+
+        wp_send_json_success( $result );
     }
 
     /* ------------------------------------------------------------------
