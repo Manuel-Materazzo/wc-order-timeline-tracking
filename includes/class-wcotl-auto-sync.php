@@ -165,7 +165,8 @@ class WCOTL_Auto_Sync {
                          AND st.meta_key = %s
                          AND st.meta_value = '1'
                    )
-                 ORDER BY ns.meta_value ASC",
+                 ORDER BY ns.meta_value ASC
+                 LIMIT 500",
                 self::META_NEXT_SYNC_AT,
                 self::META_REAL_NUMBER,
                 current_time( 'mysql' ),
@@ -305,7 +306,8 @@ class WCOTL_Auto_Sync {
             }
         }
 
-        $latest_date = null;
+        $latest_date    = null;
+        $rows_to_insert = [];
 
         foreach ( $events as $ev ) {
             $key = $ev['date'] . '|' . $ev['label'];
@@ -314,7 +316,7 @@ class WCOTL_Auto_Sync {
 
             $note = $ev['location'] ? $ev['location'] : null;
 
-            $wpdb->insert( $table, [
+            $rows_to_insert[] = [
                 'tracking_code' => $tracking_code,
                 'order_id'      => $order_id,
                 'step_date'     => $ev['date'],
@@ -322,11 +324,28 @@ class WCOTL_Auto_Sync {
                 'step_note'     => $note,
                 'step_icon'     => 'truck',
                 'step_source'   => 'auto',
-            ] );
+            ];
 
             if ( ! $latest_date || $ev['date'] > $latest_date ) {
                 $latest_date = $ev['date'];
             }
+        }
+
+        if ( ! empty( $rows_to_insert ) ) {
+            $placeholders = [];
+            $values       = [];
+            foreach ( $rows_to_insert as $row ) {
+                $placeholders[] = '(%s, %d, %s, %s, %s, %s, %s)';
+                $values[]       = $row['tracking_code'];
+                $values[]       = $row['order_id'];
+                $values[]       = $row['step_date'];
+                $values[]       = $row['step_label'];
+                $values[]       = $row['step_note'];
+                $values[]       = $row['step_icon'];
+                $values[]       = $row['step_source'];
+            }
+            $query = "INSERT INTO {$table} (tracking_code, order_id, step_date, step_label, step_note, step_icon, step_source) VALUES " . implode( ', ', $placeholders );
+            $wpdb->query( $wpdb->prepare( $query, $values ) );
         }
 
         return $latest_date;
