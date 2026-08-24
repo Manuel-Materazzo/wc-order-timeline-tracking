@@ -222,13 +222,24 @@ class WCOTL_Admin {
                             'wcotl_delete_code'
                         );
                         $view_url   = admin_url( 'admin.php?page=wcotl-tracking&view=' . urlencode( $row->tracking_code ) );
-                        $dt = new DateTime( $row->last_update );
+
+                        $last_update_ts = ! empty( $row->last_update ) ? strtotime( $row->last_update ) : false;
+                        if ( $last_update_ts !== false ) {
+                            $last_update_str = wp_date( $date_format . ' ' . $time_format, $last_update_ts );
+                        } else {
+                            try {
+                                $dt = new DateTime( $row->last_update );
+                                $last_update_str = wp_date( $date_format . ' ' . $time_format, $dt->getTimestamp() );
+                            } catch ( Exception $e ) {
+                                $last_update_str = esc_html( $row->last_update ?? '—' );
+                            }
+                        }
                     ?>
                     <tr>
                         <td><span class="wcotl-code-badge"><?php echo esc_html( $row->tracking_code ); ?></span></td>
                         <td><?php echo $row->order_id ? '<a href="' . esc_url( admin_url( 'post.php?post=' . $row->order_id . '&action=edit' ) ) . '">#' . esc_html( $row->order_id ) . '</a>' : '—'; ?></td>
                         <td><?php echo absint( $row->steps ); ?></td>
-                        <td><?php echo esc_html( $dt->format('d/m/Y H:i') ); ?></td>
+                        <td><?php echo esc_html( $last_update_str ); ?></td>
                         <td>
                             <div class="wcotl-actions-row">
                                 <a href="<?php echo esc_url( $view_url ); ?>" class="button button-secondary button-small">Manage</a>
@@ -855,7 +866,20 @@ class WCOTL_Admin {
                 <?php else : ?>
                 <ul class="wcotl-steps-list">
                     <?php foreach ( $steps as $s ) :
-                        $dt  = new DateTime($s->step_date);
+                        $step_ts = ! empty( $s->step_date ) ? strtotime( $s->step_date ) : false;
+                        if ( $step_ts !== false ) {
+                            $step_date_str  = wp_date( $date_format . ' ' . $time_format, $step_ts );
+                            $input_date_val = wp_date( 'Y-m-d\TH:i', $step_ts );
+                        } else {
+                            try {
+                                $dt             = new DateTime( $s->step_date );
+                                $step_date_str  = wp_date( $date_format . ' ' . $time_format, $dt->getTimestamp() );
+                                $input_date_val = $dt->format( 'Y-m-d\TH:i' );
+                            } catch ( Exception $e ) {
+                                $step_date_str  = esc_html( $s->step_date ?? '' );
+                                $input_date_val = '';
+                            }
+                        }
                         $del = wp_nonce_url(
                             admin_url('admin.php?page=wcotl-tracking&view=' . urlencode($code) . '&action=delete_step&step_id=' . $s->id),
                             'wcotl_delete_step'
@@ -881,7 +905,7 @@ class WCOTL_Admin {
                                 <span class="wcotl-source-badge <?php echo $src === 'auto' ? 'wcotl-source-auto' : 'wcotl-source-manual'; ?>">
                                     <?php echo $src === 'auto' ? '🛰 auto' : '✍ manual'; ?>
                                 </span>
-                                <small style="display:block;color:#646970;font-size:12px;"><?php echo esc_html($dt->format('d/m/Y H:i')); ?> &nbsp;·&nbsp; <?php echo esc_html($s->step_icon); ?></small>
+                                <small style="display:block;color:#646970;font-size:12px;"><?php echo esc_html($step_date_str); ?> &nbsp;·&nbsp; <?php echo esc_html($s->step_icon); ?></small>
                                 <?php if ($s->step_note) : ?>
                                     <p style="font-size:12px;color:#646970;margin:4px 0 0;font-style:italic;"><?php echo esc_html($s->step_note); ?></p>
                                 <?php endif; ?>
