@@ -410,6 +410,9 @@ class WCOTL_Admin {
             $wpdb->prepare( "SELECT * FROM {$table} WHERE tracking_code = %s ORDER BY step_date ASC", $code )
         );
 
+        $date_format = get_option( 'date_format', 'd/m/Y' );
+        $time_format = get_option( 'time_format', 'H:i' );
+
         $order_id_meta = WCOTL_DB::get_meta( $code, 'order_id' );
         if ( $order_id_meta === null || $order_id_meta === '' ) {
             $order_id_from_steps = $steps ? absint( $steps[0]->order_id ) : 0;
