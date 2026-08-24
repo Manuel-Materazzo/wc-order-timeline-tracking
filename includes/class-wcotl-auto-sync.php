@@ -211,7 +211,7 @@ class WCOTL_Auto_Sync {
         if ( ! $registered ) {
             $reg = $provider->register_shipment( $real_number, $carrier_code ?: null );
             if ( ! $reg['success'] ) {
-                return; // Will retry on next cron tick.
+                return; // Will retry on next scheduled interval.
             }
             if ( $reg['carrier_code'] ) {
                 WCOTL_DB::set_meta( $tracking_code, self::META_CARRIER_CODE, $reg['carrier_code'] );
@@ -256,10 +256,13 @@ class WCOTL_Auto_Sync {
         $inactivity_days = (int) get_option( 'wcotl_inactivity_days', self::DEFAULT_INACTIVITY_DAYS );
         $last_event = WCOTL_DB::get_meta( $tracking_code, self::META_LAST_EVENT_DATE );
         if ( $last_event ) {
-            $diff_days = (int) ( ( time() - strtotime( $last_event ) ) / DAY_IN_SECONDS );
-            if ( $diff_days >= $inactivity_days ) {
-                self::stop_sync( $tracking_code, 'inactivity', $diff_days );
-                self::send_inactivity_email( $tracking_code, $real_number, $diff_days );
+            $ts = strtotime( $last_event );
+            if ( $ts !== false ) {
+                $diff_days = (int) ( ( time() - $ts ) / DAY_IN_SECONDS );
+                if ( $diff_days >= $inactivity_days ) {
+                    self::stop_sync( $tracking_code, 'inactivity', $diff_days );
+                    self::send_inactivity_email( $tracking_code, $real_number, $diff_days );
+                }
             }
         }
     }
