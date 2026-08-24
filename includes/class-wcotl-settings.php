@@ -51,6 +51,7 @@ class WCOTL_Settings {
 
     public static function register_settings() {
         register_setting( 'wcotl_settings_group', 'wcotl_17track_api_key',           'sanitize_text_field' );
+        register_setting( 'wcotl_settings_group', 'wcotl_packlink_api_key',           'sanitize_text_field' );
         register_setting( 'wcotl_settings_group', 'wcotl_sync_interval',             'absint' );
         register_setting( 'wcotl_settings_group', 'wcotl_inactivity_days',           'absint' );
         register_setting( 'wcotl_settings_group', 'wcotl_delete_data_on_uninstall',  'absint' );
@@ -72,6 +73,10 @@ class WCOTL_Settings {
         if ( isset( $_POST['wcotl_17track_api_key'] ) ) {
             $api_key = sanitize_text_field( wp_unslash( $_POST['wcotl_17track_api_key'] ) );
             update_option( 'wcotl_17track_api_key', $api_key );
+        }
+        if ( isset( $_POST['wcotl_packlink_api_key'] ) ) {
+            $packlink_key = sanitize_text_field( wp_unslash( $_POST['wcotl_packlink_api_key'] ) );
+            update_option( 'wcotl_packlink_api_key', $packlink_key );
         }
         if ( isset( $_POST['wcotl_sync_interval'] ) ) {
             $interval = max( 1, absint( $_POST['wcotl_sync_interval'] ) );
@@ -133,9 +138,15 @@ class WCOTL_Settings {
             wp_send_json_error( 'Not allowed.' );
         }
 
-        $tracking_code   = sanitize_text_field( wp_unslash( $_POST['tracking_code'] ?? '' ) );
-        $real_number     = sanitize_text_field( wp_unslash( $_POST['real_number'] ?? '' ) );
-        $carrier_code    = absint( $_POST['carrier_code'] ?? 0 );
+        $tracking_code = sanitize_text_field( wp_unslash( $_POST['tracking_code'] ?? '' ) );
+        $real_number   = sanitize_text_field( wp_unslash( $_POST['real_number'] ?? '' ) );
+        $carrier_code  = absint( $_POST['carrier_code'] ?? 0 );
+        $provider_slug = sanitize_key( $_POST['provider'] ?? '17track' );
+
+        // Validate provider slug.
+        if ( ! in_array( $provider_slug, [ '17track', 'packlink' ], true ) ) {
+            $provider_slug = '17track';
+        }
 
         if ( ! $tracking_code ) {
             wp_send_json_error( 'Missing tracking_code.' );
@@ -153,10 +164,16 @@ class WCOTL_Settings {
         }
 
         if ( $real_number ) {
-            WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_REAL_NUMBER,   $real_number );
-            WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_CARRIER_CODE,  $carrier_code ?: '' );
+            WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_REAL_NUMBER,  $real_number );
+            WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_PROVIDER,     $provider_slug );
+            // Carrier code is only meaningful for 17TRACK; clear it for Packlink.
+            if ( $provider_slug === 'packlink' ) {
+                WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_CARRIER_CODE, '' );
+            } else {
+                WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_CARRIER_CODE, $carrier_code ?: '' );
+            }
             // Reset registration so it re-registers at provider on next sync.
-            WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_REGISTERED,    '' );
+            WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_REGISTERED,   '' );
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_SYNC_STOPPED,  '' );
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_STOP_REASON,   '' );
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_LAST_STATUS,   '' );
@@ -165,6 +182,7 @@ class WCOTL_Settings {
         } else {
             // Clearing the real number disables auto-tracking for this code.
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_REAL_NUMBER, '' );
+            WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_PROVIDER,    '' );
         }
 
         wp_send_json_success( 'Saved.' );
@@ -243,20 +261,17 @@ class WCOTL_Settings {
 
     public static function page() {
         $api_key                   = get_option( 'wcotl_17track_api_key', '' );
+        $packlink_api_key          = get_option( 'wcotl_packlink_api_key', '' );
         $sync_interval             = max( 1, (int) get_option( 'wcotl_sync_interval', 1 ) );
         $inactivity_days           = max( 1, (int) get_option( 'wcotl_inactivity_days', 45 ) );
         $delete_data_on_uninstall = (int) get_option( 'wcotl_delete_data_on_uninstall', 0 );
         $saved                     = isset( $_GET['saved'] );
         $next_sync                 = wp_next_scheduled( WCOTL_Auto_Sync::CRON_HOOK );
 
-        // Test provider connectivity if key is set.
-        $provider_ok = false;
-        $provider_err = '';
-        if ( $api_key ) {
-            $provider = new WCOTL_17track_Provider( $api_key );
-            $provider_ok = $provider->is_configured();
-        }
+        // Check Packlink PRO plugin availability.
+        $packlink_plugin_active = WCOTL_Packlink_Provider::is_packlink_plugin_active();
         ?>
+
         <div class="wrap wcotl-admin">
             <h1>
                 <span class="dashicons dashicons-admin-settings"></span>
@@ -340,6 +355,54 @@ class WCOTL_Settings {
                         Save Settings
                     </button>
                 </form>
+            </div>
+
+            <!-- Packlink PRO API -->
+            <div class="card" style="max-width:620px;margin-top:20px;">
+                <h2><span class="dashicons dashicons-cart"></span> Packlink PRO API</h2>
+                <?php if ( ! $packlink_plugin_active ) : ?>
+                    <p style="font-size:13px;color:#646970;">
+                        <span style="color:#d63638;font-weight:600;">⚠ Packlink PRO Shipping plugin not detected.</span><br>
+                        The Packlink PRO tracking provider is only available when the
+                        <a href="https://wordpress.org/plugins/packlink-pro-shipping/" target="_blank">Packlink PRO Shipping for WooCommerce</a>
+                        plugin is installed and active.
+                    </p>
+                <?php else : ?>
+                <p style="font-size:13px;color:#646970;margin-bottom:16px;">
+                    Enter your Packlink PRO API key to enable auto-tracking for shipments created via Packlink.
+                    Get your key from your <a href="https://pro.packlink.com" target="_blank">Packlink PRO dashboard</a>
+                    under <strong>Settings → Packlink PRO API</strong>.
+                    Unlike 17TRACK, Packlink tracks by its own <strong>Shipment Reference</strong> — no carrier code needed.
+                </p>
+
+                <form method="POST" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
+                    <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
+                    <input type="hidden" name="action" value="wcotl_save_settings">
+
+                    <div class="wcotl-form-row">
+                        <label>
+                            Packlink PRO API Key
+                            <?php if ( $packlink_api_key ) : ?>
+                                <span style="color:#008a20;font-size:11px;margin-left:6px;">✓ Configured</span>
+                            <?php endif; ?>
+                        </label>
+                        <div style="display:flex;gap:6px;">
+                            <input type="password" id="wcotl_packlink_key_field" name="wcotl_packlink_api_key"
+                                   value="<?php echo esc_attr( $packlink_api_key ); ?>"
+                                   placeholder="Paste your Packlink PRO API key here"
+                                   style="font-family:monospace;flex:1;">
+                            <button type="button" class="button" onclick="var f = document.getElementById('wcotl_packlink_key_field'); f.type = f.type === 'password' ? 'text' : 'password'; this.textContent = f.type === 'password' ? 'Show' : 'Hide';">Show</button>
+                        </div>
+                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
+                            Leave empty to disable Packlink auto-tracking.
+                        </small>
+                    </div>
+
+                    <button type="submit" class="button button-primary" style="margin-top:8px;">
+                        Save Packlink Settings
+                    </button>
+                </form>
+                <?php endif; ?>
             </div>
 
             <!-- Cloudflare Turnstile & Anti-Scraping Protection -->

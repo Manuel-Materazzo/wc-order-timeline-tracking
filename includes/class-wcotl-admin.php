@@ -434,7 +434,13 @@ class WCOTL_Admin {
         $at_last_event   = WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_LAST_EVENT_DATE );
         $at_stopped      = WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_SYNC_STOPPED );
         $at_stop_reason  = WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_STOP_REASON );
-        $provider_active = (bool) get_option( 'wcotl_17track_api_key', '' );
+        $at_provider     = WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_PROVIDER ) ?: '17track';
+
+        // Determine which providers are configured.
+        $has_17track         = (bool) get_option( 'wcotl_17track_api_key', '' );
+        $has_packlink        = WCOTL_Packlink_Provider::is_packlink_plugin_active() && (bool) get_option( 'wcotl_packlink_api_key', '' );
+        $provider_active     = $has_17track || $has_packlink;
+        $packlink_available  = WCOTL_Packlink_Provider::is_packlink_plugin_active();
 
         echo wp_kses_post( $notice );
         ?>
@@ -540,12 +546,12 @@ class WCOTL_Admin {
             </form>
         </div>
 
-        <!-- Auto-tracking 17TRACK -->
+        <!-- Auto-tracking -->
         <div class="card" style="margin-bottom:24px;max-width:none;">
-            <h2><span class="dashicons dashicons-share-alt"></span> Auto-Tracking (17TRACK)</h2>
+            <h2><span class="dashicons dashicons-share-alt"></span> Auto-Tracking</h2>
             <?php if ( ! $provider_active ) : ?>
                 <p style="font-size:13px;color:#646970;">
-                    Auto-tracking is not active. Configure your API key in
+                    Auto-tracking is not active. Configure at least one API key in
                     <a href="<?php echo esc_url( admin_url('admin.php?page=wcotl-settings') ); ?>">Settings</a>.
                 </p>
             <?php else : ?>
@@ -579,24 +585,52 @@ class WCOTL_Admin {
                         </button>
                     <?php endif; ?>
                 <?php else : ?>
-                    <span class="wcotl-sync-status wcotl-sync-pending">— No real tracking number set</span>
+                    <span class="wcotl-sync-status wcotl-sync-pending">— No tracking reference set</span>
                 <?php endif; ?>
             </div>
 
-            <!-- Real tracking number form -->
+            <!-- Provider selector + tracking reference form -->
             <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
+                <?php if ( $has_17track && ( $packlink_available && $has_packlink ) ) : ?>
+                <!-- Show provider selector only when both providers are configured -->
+                <div class="wcotl-form-row" style="margin-bottom:0;width:200px;">
+                    <label>Provider</label>
+                    <select id="wcotl-provider-select" onchange="wcotlOnProviderChange()">
+                        <option value="17track" <?php selected( $at_provider, '17track' ); ?>>17TRACK</option>
+                        <option value="packlink" <?php selected( $at_provider, 'packlink' ); ?>>Packlink PRO</option>
+                    </select>
+                </div>
+                <?php elseif ( $has_17track ) : ?>
+                <input type="hidden" id="wcotl-provider-select" value="17track">
+                <?php elseif ( $has_packlink ) : ?>
+                <input type="hidden" id="wcotl-provider-select" value="packlink">
+                <?php endif; ?>
+
                 <div class="wcotl-form-row" style="margin-bottom:0;width:260px;">
-                    <label>Carrier tracking number
+                    <label id="wcotl-real-number-label">
+                        <?php if ( $at_provider === 'packlink' ) : ?>
+                            Packlink Shipment Reference
+                        <?php else : ?>
+                            Carrier tracking number
+                        <?php endif; ?>
                         <span class="dashicons dashicons-info tooltip">
-                            <span class="tooltiptext">The real carrier tracking code (e.g. RR123456789CN). Used to query 17TRACK.</span>
+                            <span class="tooltiptext" id="wcotl-real-number-tip">
+                                <?php if ( $at_provider === 'packlink' ) : ?>
+                                    The Packlink Shipment Reference (e.g. ESXXXXXXXXXXXXXX) from your Packlink PRO account.
+                                <?php else : ?>
+                                    The real carrier tracking code (e.g. RR123456789CN). Used to query 17TRACK.
+                                <?php endif; ?>
+                            </span>
                         </span>
                     </label>
                     <input type="text" id="wcotl-real-number"
                            value="<?php echo esc_attr($at_real_number ?: ''); ?>"
-                           placeholder="e.g. RR123456789CN"
+                           placeholder="<?php echo esc_attr( $at_provider === 'packlink' ? 'e.g. ESXXXXXXXXXXXXXX' : 'e.g. RR123456789CN' ); ?>"
                            style="font-family:monospace;">
                 </div>
-                <div class="wcotl-form-row" style="margin-bottom:0;width:260px;">
+
+                <!-- Carrier selector: only relevant for 17TRACK -->
+                <div id="wcotl-carrier-row" class="wcotl-form-row" style="margin-bottom:0;width:260px;<?php echo $at_provider === 'packlink' ? 'display:none;' : ''; ?>">
                     <label>Carrier
                         <span class="dashicons dashicons-info tooltip">
                             <span class="tooltiptext">Click "Detect carrier" to let 17TRACK suggest carriers automatically. If none are detected, enter the carrier code manually (find codes at <a href="https://www.17track.net/en/carriers" target="_blank">17track.net/carrier-codes</a>).</span>
@@ -609,9 +643,12 @@ class WCOTL_Admin {
                         <?php endif; ?>
                     </select>
                 </div>
-                <div style="display:flex;gap:6px;">
+                <div id="wcotl-carrier-btn-row" style="<?php echo $at_provider === 'packlink' ? 'display:none;' : 'display:flex;'; ?>gap:6px;">
                     <button class="button button-secondary button-small"
+                            id="wcotl-detect-carrier-btn"
                             onclick="wcotlDetectCarriers()">🔍 Detect carrier</button>
+                </div>
+                <div style="display:flex;gap:6px;">
                     <button class="button button-primary button-small"
                             onclick="wcotlSaveAutoTracking()">💾 Save</button>
                 </div>
@@ -635,6 +672,32 @@ class WCOTL_Admin {
 
             <script>
             var WCOTL_TRACKING_CODE = '<?php echo esc_js($code); ?>';
+
+            function wcotlGetProvider() {
+                var sel = document.getElementById('wcotl-provider-select');
+                return sel ? sel.value : '17track';
+            }
+
+            function wcotlOnProviderChange() {
+                var provider = wcotlGetProvider();
+                var carrierRow    = document.getElementById('wcotl-carrier-row');
+                var carrierBtnRow = document.getElementById('wcotl-carrier-btn-row');
+                var labelEl       = document.getElementById('wcotl-real-number-label');
+                var inputEl       = document.getElementById('wcotl-real-number');
+                var tipEl         = document.getElementById('wcotl-real-number-tip');
+
+                if ( provider === 'packlink' ) {
+                    carrierRow.style.display    = 'none';
+                    carrierBtnRow.style.display = 'none';
+                    inputEl.placeholder         = 'e.g. ESXXXXXXXXXXXXXX';
+                    if (tipEl) tipEl.textContent = 'The Packlink Shipment Reference from your Packlink PRO account.';
+                } else {
+                    carrierRow.style.display    = '';
+                    carrierBtnRow.style.display = '';
+                    inputEl.placeholder         = 'e.g. RR123456789CN';
+                    if (tipEl) tipEl.textContent = 'The real carrier tracking code (e.g. RR123456789CN). Used to query 17TRACK.';
+                }
+            }
 
             function wcotlDetectCarriers() {
                 var num = document.getElementById('wcotl-real-number').value.trim();
@@ -792,9 +855,10 @@ class WCOTL_Admin {
             });
 
             function wcotlSaveAutoTracking() {
-                var num     = document.getElementById('wcotl-real-number').value.trim();
-                var carrier = document.getElementById('wcotl-carrier-select').value;
-                var msg     = document.getElementById('wcotl-at-message');
+                var num      = document.getElementById('wcotl-real-number').value.trim();
+                var carrier  = document.getElementById('wcotl-carrier-select') ? document.getElementById('wcotl-carrier-select').value : '0';
+                var provider = wcotlGetProvider();
+                var msg      = document.getElementById('wcotl-at-message');
                 msg.textContent = '⏳ Saving...';
                 fetch(WCOTL_AJAX.url, {
                     method: 'POST',
@@ -804,7 +868,8 @@ class WCOTL_Admin {
                         nonce:         WCOTL_AJAX.nonce,
                         tracking_code: WCOTL_TRACKING_CODE,
                         real_number:   num,
-                        carrier_code:  carrier
+                        carrier_code:  carrier,
+                        provider:      provider
                     })
                 }).then(r => r.json()).then(res => {
                     if (!res.success) { msg.style.color='#c0392b'; msg.textContent = '❌ ' + (res.data || 'Error'); return; }
@@ -835,9 +900,9 @@ class WCOTL_Admin {
                         var d = res.data || {};
                         var stepLabels = {
                             no_provider:         '❌ No API key configured',
-                            no_real_number:      '❌ No carrier tracking number saved',
-                            registration_failed: '❌ 17TRACK registration failed',
-                            fetch_failed:        '❌ 17TRACK data fetch failed',
+                            no_real_number:      '❌ No tracking reference saved',
+                            registration_failed: '❌ Provider registration failed',
+                            fetch_failed:        '❌ Tracking data fetch failed',
                         };
                         var label = stepLabels[d.step] || ('❌ Error at step: ' + (d.step || '?'));
                         msg.style.color = '#c0392b';
