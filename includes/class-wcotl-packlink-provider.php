@@ -81,56 +81,82 @@ class WCOTL_Packlink_Provider extends WCOTL_Tracking_Provider {
     /**
      * Fetch the latest tracking events for a Packlink shipment reference.
      *
-     * The tracking-history endpoint returns an array of event objects:
-     *   [ { "timestamp": 1234567890, "description": "...", "city": "..." }, ... ]
+     * In the Packlink PRO API:
+     *   - GET /v1/shipments/{reference}        returns shipment details (including 'status')
+     *   - GET /v1/shipments/{reference}/track  returns tracking events: [ { "timestamp": ..., "description": ..., "city": ... }, ... ]
+     *
+     * If /track returns 404 (common when the shipment has just been created or no carrier events exist yet),
+     * we treat it as an empty event list rather than a fatal error.
      *
      * @param string $real_tracking_number  Packlink shipment reference.
      * @param int    $carrier_code          Unused.
      */
     public function get_tracking_info( string $real_tracking_number, int $carrier_code = 0 ): array {
-        // First, fetch shipment status.
-        $shipment_resp = $this->request( 'shipments/' . rawurlencode( $real_tracking_number ) );
+        $clean_ref = trim( $real_tracking_number );
+
+        // 1. Fetch shipment status.
+        $shipment_resp = $this->request( 'shipments/' . rawurlencode( $clean_ref ) );
         if ( is_wp_error( $shipment_resp ) ) {
-            return $this->error_response( $shipment_resp->get_error_message() );
+            $err_code = $shipment_resp->get_error_code();
+            $err_msg  = $shipment_resp->get_error_message();
+
+            if ( strpos( $err_msg, 'HTTP 404' ) !== false ) {
+                return $this->error_response(
+                    sprintf(
+                        'Packlink shipment reference "%s" was not found (404). Please verify that the code matches the Packlink Shipment Reference in your Packlink PRO account (e.g. ES2024...) and that your Packlink API key matches this account.',
+                        $clean_ref
+                    )
+                );
+            }
+
+            return $this->error_response( $err_msg );
         }
 
         $shipment_body   = $shipment_resp['body'] ?? [];
-        $packlink_status = $shipment_body['state'] ?? '';
+        $packlink_status = $shipment_body['status'] ?? $shipment_body['state'] ?? '';
         $status          = self::STATUS_MAP[ $packlink_status ] ?? 'in_transit';
 
-        // Then, fetch tracking-history events.
-        $history_resp = $this->request( 'shipments/' . rawurlencode( $real_tracking_number ) . '/tracking-history' );
+        // 2. Fetch tracking events using the official Packlink endpoint: /shipments/{reference}/track
+        // If /track returns 404, fallback to /tracking-history or treat as empty events.
+        $history_resp = $this->request( 'shipments/' . rawurlencode( $clean_ref ) . '/track' );
+
         if ( is_wp_error( $history_resp ) ) {
-            return $this->error_response( $history_resp->get_error_message() );
+            // If /track gave 404, try legacy /tracking-history
+            $history_resp = $this->request( 'shipments/' . rawurlencode( $clean_ref ) . '/tracking-history' );
         }
 
-        $history = $history_resp['body'] ?? [];
-
-        // The endpoint may return an array directly or an object with a 'data' key.
-        if ( isset( $history['data'] ) && is_array( $history['data'] ) ) {
-            $raw_events = $history['data'];
-        } elseif ( is_array( $history ) && ! empty( $history ) && isset( $history[0] ) ) {
-            $raw_events = $history;
-        } else {
-            $raw_events = [];
+        $raw_events = [];
+        if ( ! is_wp_error( $history_resp ) ) {
+            $history = $history_resp['body'] ?? [];
+            if ( isset( $history['data'] ) && is_array( $history['data'] ) ) {
+                $raw_events = $history['data'];
+            } elseif ( is_array( $history ) && ! empty( $history ) && isset( $history[0] ) ) {
+                $raw_events = $history;
+            }
         }
 
         $events    = [];
         $seen_keys = [];
 
         foreach ( $raw_events as $ev ) {
-            // Packlink returns unix timestamps; fall back to created_at string.
+            if ( ! is_array( $ev ) ) {
+                continue;
+            }
+
+            // Packlink returns unix timestamps; fall back to created_at / date string.
             $ts = null;
             if ( ! empty( $ev['timestamp'] ) && is_numeric( $ev['timestamp'] ) ) {
                 $ts = (int) $ev['timestamp'];
             } elseif ( ! empty( $ev['created_at'] ) ) {
                 $ts = strtotime( $ev['created_at'] );
+            } elseif ( ! empty( $ev['date'] ) ) {
+                $ts = strtotime( $ev['date'] );
             }
 
             if ( ! $ts ) continue;
 
             $date  = $this->format_date( $ts );
-            $label = sanitize_text_field( $ev['description'] ?? '' );
+            $label = sanitize_text_field( $ev['description'] ?? $ev['status'] ?? $ev['message'] ?? '' );
             if ( empty( $label ) ) continue;
 
             // Deduplicate.
