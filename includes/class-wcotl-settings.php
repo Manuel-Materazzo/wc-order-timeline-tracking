@@ -142,9 +142,13 @@ class WCOTL_Settings {
         }
 
         global $wpdb;
-        $table = $wpdb->prefix . 'order_timeline';
-        $exists = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
-        if ( ! $exists ) {
+        $table      = $wpdb->prefix . 'order_timeline';
+        $meta_table = $wpdb->prefix . 'order_timeline_meta';
+        // A tracking code is valid if it has at least one step OR at least one meta row.
+        // Newly created codes (no steps yet) only exist in the meta table.
+        $exists_in_steps = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
+        $exists_in_meta  = $exists_in_steps ? null : $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$meta_table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
+        if ( ! $exists_in_steps && ! $exists_in_meta ) {
             wp_send_json_error( 'Unknown tracking code.' );
         }
 
@@ -180,9 +184,11 @@ class WCOTL_Settings {
         if ( ! $tracking_code ) wp_send_json_error( 'Missing tracking_code.' );
 
         global $wpdb;
-        $table = $wpdb->prefix . 'order_timeline';
-        $exists = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
-        if ( ! $exists ) {
+        $table      = $wpdb->prefix . 'order_timeline';
+        $meta_table = $wpdb->prefix . 'order_timeline_meta';
+        $exists_in_steps = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
+        $exists_in_meta  = $exists_in_steps ? null : $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$meta_table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
+        if ( ! $exists_in_steps && ! $exists_in_meta ) {
             wp_send_json_error( 'Unknown tracking code.' );
         }
 
@@ -205,9 +211,11 @@ class WCOTL_Settings {
         if ( ! $tracking_code ) wp_send_json_error( 'Missing tracking_code.' );
 
         global $wpdb;
-        $table = $wpdb->prefix . 'order_timeline';
-        $exists = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
-        if ( ! $exists ) {
+        $table      = $wpdb->prefix . 'order_timeline';
+        $meta_table = $wpdb->prefix . 'order_timeline_meta';
+        $exists_in_steps = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
+        $exists_in_meta  = $exists_in_steps ? null : $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$meta_table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
+        if ( ! $exists_in_steps && ! $exists_in_meta ) {
             wp_send_json_error( 'Unknown tracking code.' );
         }
 

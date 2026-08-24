@@ -1101,15 +1101,20 @@ class WCOTL_Admin {
 
             if ( strlen($code) >= 3 ) {
                 global $wpdb;
-                $table  = $wpdb->prefix . 'order_timeline';
-                $exists = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE tracking_code = %s LIMIT 1", $code ) );
-                if ( $exists ) {
+                $table      = $wpdb->prefix . 'order_timeline';
+                $meta_table = $wpdb->prefix . 'order_timeline_meta';
+                $exists_in_steps = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE tracking_code = %s LIMIT 1", $code ) );
+                $exists_in_meta  = $exists_in_steps ? null : $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$meta_table} WHERE tracking_code = %s LIMIT 1", $code ) );
+                if ( $exists_in_steps || $exists_in_meta ) {
                     $notice = '<div class="notice notice-error is-dismissible"><p>' . sprintf( esc_html__( 'Tracking code "%s" already exists. Please choose a different code.', 'wc-order-timeline' ), esc_html( $code ) ) . '</p></div>';
                 } else {
                     $order_id_from_post = absint( $_POST['order_id'] ?? 0 );
                     if ( $order_id_from_post ) {
                         WCOTL_DB::set_meta( $code, 'order_id', $order_id_from_post );
                     }
+                    // Always write a creation timestamp so the code exists in the meta table
+                    // even before any steps are added (required for AJAX validation).
+                    WCOTL_DB::set_meta( $code, 'created_at', current_time( 'mysql' ) );
                     wp_redirect( admin_url('admin.php?page=wcotl-tracking&view=' . urlencode($code) ) );
                     exit;
                 }
