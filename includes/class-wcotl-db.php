@@ -77,25 +77,33 @@ class WCOTL_DB {
             $table = $wpdb->prefix . 'order_timeline';
             $meta  = $wpdb->prefix . 'order_timeline_meta';
 
-            $timeline_cols = $wpdb->get_col( "SHOW COLUMNS FROM {$table}" );
-            if ( ! in_array( 'step_voided', $timeline_cols, true ) ) {
-                $wpdb->query( "ALTER TABLE {$table} ADD COLUMN step_voided TINYINT(1) NOT NULL DEFAULT 0" );
-            }
-            if ( ! in_array( 'step_void_reason', $timeline_cols, true ) ) {
-                $wpdb->query( "ALTER TABLE {$table} ADD COLUMN step_void_reason TEXT DEFAULT NULL" );
-            }
-            if ( ! in_array( 'step_source', $timeline_cols, true ) ) {
-                $wpdb->query( "ALTER TABLE {$table} ADD COLUMN step_source VARCHAR(16) NOT NULL DEFAULT 'manual'" );
+            $table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+            if ( $table_exists === $table ) {
+                $timeline_cols = $wpdb->get_col( "SHOW COLUMNS FROM {$table}" );
+                if ( is_array( $timeline_cols ) && empty( $wpdb->last_error ) ) {
+                    if ( ! in_array( 'step_voided', $timeline_cols, true ) ) {
+                        $wpdb->query( "ALTER TABLE {$table} ADD COLUMN step_voided TINYINT(1) NOT NULL DEFAULT 0" );
+                    }
+                    if ( ! in_array( 'step_void_reason', $timeline_cols, true ) ) {
+                        $wpdb->query( "ALTER TABLE {$table} ADD COLUMN step_void_reason TEXT DEFAULT NULL" );
+                    }
+                    if ( ! in_array( 'step_source', $timeline_cols, true ) ) {
+                        $wpdb->query( "ALTER TABLE {$table} ADD COLUMN step_source VARCHAR(16) NOT NULL DEFAULT 'manual'" );
+                    }
+                }
             }
 
             // 1.5.1: per-shipment next_sync_at cursor for the auto-sync engine.
-            $meta_cols = $wpdb->get_col( "SHOW COLUMNS FROM {$meta}" );
-            if ( ! in_array( 'next_sync_at', $meta_cols, true ) ) {
-                $wpdb->query( "ALTER TABLE {$meta} ADD COLUMN next_sync_at DATETIME DEFAULT NULL" );
-                $wpdb->query( "ALTER TABLE {$meta} ADD INDEX idx_next_sync_at (next_sync_at)" );
+            $meta_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $meta ) );
+            if ( $meta_exists === $meta ) {
+                $meta_cols = $wpdb->get_col( "SHOW COLUMNS FROM {$meta}" );
+                if ( is_array( $meta_cols ) && empty( $wpdb->last_error ) ) {
+                    if ( ! in_array( 'next_sync_at', $meta_cols, true ) ) {
+                        $wpdb->query( "ALTER TABLE {$meta} ADD COLUMN next_sync_at DATETIME DEFAULT NULL" );
+                        $wpdb->query( "ALTER TABLE {$meta} ADD INDEX idx_next_sync_at (next_sync_at)" );
+                    }
+                }
             }
-        }
-    }
 
     public static function get_meta( $tracking_code, $key ) {
         global $wpdb;
