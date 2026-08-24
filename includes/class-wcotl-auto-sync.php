@@ -44,6 +44,12 @@ class WCOTL_Auto_Sync {
     /** Meta key: reason sync was stopped */
     const META_STOP_REASON = 'auto_tracking_stop_reason';
 
+    /**
+     * Meta key: provider slug assigned to this tracking code.
+     * '17track' (default/empty) or 'packlink'.
+     */
+    const META_PROVIDER = 'auto_tracking_provider';
+
     /** Days of inactivity before we stop polling */
     const DEFAULT_INACTIVITY_DAYS = 45;
 
@@ -117,8 +123,8 @@ class WCOTL_Auto_Sync {
      * parameters.
      */
     public static function run_sync() {
-        $provider = self::get_provider();
-        if ( ! $provider || ! $provider->is_configured() ) {
+        // Bail early if no provider is configured at all (neither 17TRACK nor Packlink).
+        if ( ! self::has_any_provider() ) {
             return;
         }
 
@@ -181,7 +187,8 @@ class WCOTL_Auto_Sync {
                 break;
             }
 
-            self::sync_code( $tracking_code, $provider );
+            // Each code resolves its own provider (17TRACK or Packlink PRO).
+            self::sync_code( $tracking_code );
 
             // Advance the per-shipment cursor regardless of whether sync_code
             // found new events – we still checked, that counts as a sync.
@@ -210,11 +217,11 @@ class WCOTL_Auto_Sync {
      */
     public static function sync_code( string $tracking_code, ?WCOTL_Tracking_Provider $provider = null ): array {
         if ( ! $provider ) {
-            $provider = self::get_provider();
+            $provider = self::get_provider_for_code( $tracking_code );
             if ( ! $provider || ! $provider->is_configured() ) {
                 return [
                     'step'  => 'no_provider',
-                    'error' => 'No 17TRACK API key configured. Check Settings → ⚙ Settings.',
+                    'error' => 'No auto-tracking provider configured for this code. Check Settings → ⚙ Settings.',
                     'status' => null,
                     'events_added' => 0,
                 ];
@@ -241,7 +248,7 @@ class WCOTL_Auto_Sync {
                 self::log( "Registration failed for {$tracking_code} ({$real_number}): " . ( $reg['error'] ?? '?' ) );
                 return [
                     'step'  => 'registration_failed',
-                    'error' => $reg['error'] ?? 'Registration rejected by 17TRACK.',
+                    'error' => $reg['error'] ?? 'Registration rejected by the tracking provider.',
                     'status' => null,
                     'events_added' => 0,
                 ];
@@ -260,7 +267,7 @@ class WCOTL_Auto_Sync {
             self::log( "Fetch failed for {$tracking_code} ({$real_number}): " . ( $info['error'] ?? '?' ) );
             return [
                 'step'  => 'fetch_failed',
-                'error' => $info['error'] ?? 'Could not fetch tracking info from 17TRACK.',
+                'error' => $info['error'] ?? 'Could not fetch tracking info from the provider.',
                 'status' => null,
                 'events_added' => 0,
             ];
@@ -436,7 +443,7 @@ class WCOTL_Auto_Sync {
         WCOTL_DB::set_meta( $tracking_code, self::META_SYNC_STOPPED, '1' );
         $reason_text = match( $reason ) {
             'delivered'  => 'Shipment delivered.',
-            'expired'    => '17TRACK marked shipment as expired.',
+            'expired'    => 'Shipment marked as expired by the provider.',
             'inactivity' => "No status update for {$days} days.",
             default      => $reason,
         };
@@ -473,14 +480,54 @@ class WCOTL_Auto_Sync {
      * ------------------------------------------------------------------ */
 
     /**
-     * Build and return the configured tracking provider, or null.
+     * Build and return the 17TRACK provider if configured, or null.
+     * Kept for backward compatibility and use in WCOTL_Settings.
      *
-     * @return WCOTL_Tracking_Provider|null
+     * @return WCOTL_17track_Provider|null
      */
-    public static function get_provider(): ?WCOTL_Tracking_Provider {
+    public static function get_provider(): ?WCOTL_17track_Provider {
         $api_key = get_option( 'wcotl_17track_api_key', '' );
         if ( ! $api_key ) return null;
         return new WCOTL_17track_Provider( $api_key );
+    }
+
+    /**
+     * Build and return the Packlink PRO provider if configured, or null.
+     *
+     * @return WCOTL_Packlink_Provider|null
+     */
+    public static function get_packlink_provider(): ?WCOTL_Packlink_Provider {
+        if ( ! WCOTL_Packlink_Provider::is_packlink_plugin_active() ) return null;
+        $api_key = get_option( 'wcotl_packlink_api_key', '' );
+        if ( ! $api_key ) return null;
+        $provider = new WCOTL_Packlink_Provider( $api_key );
+        return $provider->is_configured() ? $provider : null;
+    }
+
+    /**
+     * Resolve and return the correct provider for a specific tracking code.
+     *
+     * The provider slug is stored in META_PROVIDER:
+     *   'packlink' => Packlink PRO provider
+     *   '17track' or '' (default) => 17TRACK provider
+     *
+     * @param string $tracking_code
+     * @return WCOTL_Tracking_Provider|null
+     */
+    public static function get_provider_for_code( string $tracking_code ): ?WCOTL_Tracking_Provider {
+        $slug = WCOTL_DB::get_meta( $tracking_code, self::META_PROVIDER ) ?: '17track';
+        if ( $slug === 'packlink' ) {
+            return self::get_packlink_provider();
+        }
+        return self::get_provider();
+    }
+
+    /**
+     * Return true if at least one tracking provider is configured and ready.
+     * Used by run_sync() to bail early when nothing is usable.
+     */
+    public static function has_any_provider(): bool {
+        return self::get_provider() !== null || self::get_packlink_provider() !== null;
     }
 
     /* ------------------------------------------------------------------
