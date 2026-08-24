@@ -13,6 +13,13 @@ class WCOTL_DB {
      */
     private static $delivered_at_cache = array();
 
+    /**
+     * In-memory cache for presets.
+     *
+     * @var array|null
+     */
+    private static $presets_cache = null;
+
     public static function init() {
         add_action( 'admin_init', array( __CLASS__, 'maybe_upgrade' ) );
     }
@@ -203,10 +210,28 @@ class WCOTL_DB {
         }
     }
 
+    public static function clear_presets_cache() {
+        self::$presets_cache = null;
+        wp_cache_delete( 'wcotl_presets', 'wcotl' );
+    }
+
     public static function get_presets() {
+        if ( self::$presets_cache !== null ) {
+            return self::$presets_cache;
+        }
+
+        $cached = wp_cache_get( 'wcotl_presets', 'wcotl' );
+        if ( false !== $cached ) {
+            self::$presets_cache = $cached;
+            return self::$presets_cache;
+        }
+
         global $wpdb;
         $t = $wpdb->prefix . 'order_timeline_presets';
-        return $wpdb->get_results( "SELECT * FROM {$t} ORDER BY sort_order ASC, id ASC" );
+        $presets = $wpdb->get_results( "SELECT * FROM {$t} ORDER BY sort_order ASC, id ASC" );
+        self::$presets_cache = $presets;
+        wp_cache_set( 'wcotl_presets', $presets, 'wcotl', 300 );
+        return self::$presets_cache;
     }
 
     public static function get_delivered_at_for_order( $order_id ) {
