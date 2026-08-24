@@ -100,6 +100,73 @@ class WCOTL_Shortcode {
         delete_transient( $transient_key );
     }
 
+    /**
+     * Allowed HTML tags and attributes for SVG icons.
+     *
+     * @return array
+     */
+    public static function get_allowed_svg_tags() {
+        return [
+            'svg' => [
+                'viewbox'        => true,
+                'fill'           => true,
+                'stroke'         => true,
+                'stroke-width'   => true,
+                'stroke-linecap' => true,
+                'stroke-linejoin'=> true,
+                'class'          => true,
+                'style'          => true,
+                'width'          => true,
+                'height'         => true,
+            ],
+            'path' => [
+                'd'              => true,
+                'fill'           => true,
+                'stroke'         => true,
+                'stroke-width'   => true,
+                'stroke-linecap' => true,
+                'stroke-linejoin'=> true,
+            ],
+            'polyline' => [
+                'points'         => true,
+                'fill'           => true,
+                'stroke'         => true,
+                'stroke-width'   => true,
+                'stroke-linecap' => true,
+                'stroke-linejoin'=> true,
+            ],
+            'circle' => [
+                'cx'             => true,
+                'cy'             => true,
+                'r'              => true,
+                'fill'           => true,
+                'stroke'         => true,
+                'stroke-width'   => true,
+            ],
+            'rect' => [
+                'x'              => true,
+                'y'              => true,
+                'width'          => true,
+                'height'         => true,
+                'rx'             => true,
+                'ry'             => true,
+                'fill'           => true,
+                'stroke'         => true,
+                'stroke-width'   => true,
+            ],
+            'line' => [
+                'x1'             => true,
+                'y1'             => true,
+                'x2'             => true,
+                'y2'             => true,
+                'stroke'         => true,
+                'stroke-width'   => true,
+                'stroke-linecap' => true,
+                'stroke-linejoin'=> true,
+            ],
+        ];
+    }
+
     public static function render() {
         ob_start();
 
@@ -273,7 +340,7 @@ class WCOTL_Shortcode {
                             <?php if ( $is_voided ) : ?>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                             <?php else : ?>
-                            <?php echo $icon_svg; ?>
+                            <?php echo wp_kses( $icon_svg, self::get_allowed_svg_tags() ); ?>
                             <?php endif; ?>
                         </div>
                         <div class="wcotl-step__body">
