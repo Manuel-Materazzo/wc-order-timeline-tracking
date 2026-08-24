@@ -176,13 +176,79 @@ class WCOTL_Packlink_Provider extends WCOTL_Tracking_Provider {
     /**
      * Check if the Packlink PRO Shipping for WooCommerce plugin is active.
      *
-     * Performed via class_exists so it works reliably after plugins_loaded.
-     * We check multiple possible class names to be robust across plugin versions.
+     * Checks multiple detection vectors:
+     *   1. Standard WordPress active_plugins option (and sitewide active plugins for multisite).
+     *   2. is_plugin_active() helper if available.
+     *   3. Packlink-specific constants, classes, and functions.
      */
     public static function is_packlink_plugin_active(): bool {
-        return class_exists( 'Packlink\\WooCommerce\\Integration\\Bootstrap' )
+        // 1. Check known plugin file paths in active_plugins option
+        $active_plugins = (array) get_option( 'active_plugins', [] );
+        if ( is_multisite() ) {
+            $network_active = (array) get_site_option( 'active_sitewide_plugins', [] );
+            $active_plugins = array_merge( $active_plugins, array_keys( $network_active ) );
+        }
+
+        $known_basenames = [
+            'packlink-pro-shipping/packlink-pro-shipping.php',
+            'packlink-pro-shipping/packlink.php',
+            'packlink-pro-shipping/index.php',
+            'packlink-pro-shipping/bootstrap.php',
+            'packlink-pro/packlink.php',
+            'packlink-pro/packlink-pro.php',
+        ];
+
+        foreach ( $known_basenames as $basename ) {
+            if ( in_array( $basename, $active_plugins, true ) ) {
+                return true;
+            }
+        }
+
+        // Fuzzy match: check if any active plugin entry is inside a packlink directory
+        foreach ( $active_plugins as $plugin_file ) {
+            if ( stripos( $plugin_file, 'packlink' ) !== false ) {
+                return true;
+            }
+        }
+
+        // 2. Check using WordPress is_plugin_active() helper
+        if ( ! function_exists( 'is_plugin_active' ) ) {
+            include_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+        if ( function_exists( 'is_plugin_active' ) ) {
+            foreach ( $known_basenames as $basename ) {
+                if ( is_plugin_active( $basename ) ) {
+                    return true;
+                }
+            }
+        }
+
+        // 3. Check for any defined Packlink constants
+        if ( defined( 'PACKLINK_VERSION' )
+            || defined( 'PACKLINK_PRO_SHIPPING' )
+            || defined( 'PACKLINK_PLUGIN_NAME' )
+            || defined( 'PACKLINK_PLUGIN_FILE' )
+            || defined( 'PACKLINK_PLUGIN_DIR' )
+            || defined( 'PACKLINK_INTEGRATION' )
+        ) {
+            return true;
+        }
+
+        // 4. Check loaded class names across various Packlink versions
+        if ( class_exists( 'Packlink\\WooCommerce\\Integration\\Bootstrap' )
             || class_exists( 'Packlink\\WooCommerce\\Bootstrap' )
-            || class_exists( 'Packlink_Pro_Shipping' );
+            || class_exists( 'Packlink\\WooCommerce\\Components\\Bootstrap' )
+            || class_exists( 'Packlink\\BusinessLogic\\Bootstrap' )
+            || class_exists( 'Packlink_Pro_Shipping' )
+            || class_exists( 'PacklinkProShipping' )
+            || class_exists( 'Packlink_Shipping_Method' )
+            || class_exists( 'WC_Packlink_Shipping' )
+        ) {
+            return true;
+        }
+
+        // 5. Allow external override filter
+        return (bool) apply_filters( 'wcotl_is_packlink_active', false );
     }
 
     /* ------------------------------------------------------------------
