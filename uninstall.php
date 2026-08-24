@@ -8,10 +8,7 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 }
 
 // Clear scheduled cron hook
-$timestamp = wp_next_scheduled( 'wcotl_auto_sync' );
-if ( $timestamp ) {
-    wp_unschedule_event( $timestamp, 'wcotl_auto_sync' );
-}
+wp_clear_scheduled_hook( 'wcotl_auto_sync' );
 
 // Only delete database tables and options if explicitly configured in settings.
 $delete_data = get_option( 'wcotl_delete_data_on_uninstall', 0 );
