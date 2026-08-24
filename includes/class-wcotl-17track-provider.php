@@ -179,6 +179,12 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
         $carriers = [];
         $list     = $response['body']['data'] ?? [];
 
+        // 17TRACK occasionally returns a non-array value for 'data' (e.g. null or an
+        // error string) when no carriers are found. Guard against that here.
+        if ( ! is_array( $list ) ) {
+            return $carriers;
+        }
+
         foreach ( $list as $item ) {
             $code = isset( $item['key'] ) ? (int) $item['key'] : 0;
             $name = $item['value'] ?? '';
