@@ -110,10 +110,7 @@ class WCOTL_Admin {
             }
             $wpdb->delete( $table, [ 'id' => absint( $_GET['step_id'] ) ] );
             echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Step deleted.', 'wc-order-timeline' ) . '</p></div>';
-        }
-
-        // Void / unvoid step toggle
-        if (
+        } elseif (
             isset( $_GET['action'], $_GET['step_id'], $_GET['_wpnonce'] ) &&
             in_array( $_GET['action'], [ 'void_step', 'unvoid_step' ], true ) &&
             wp_verify_nonce( $_GET['_wpnonce'], 'wcotl_void_step_' . absint( $_GET['step_id'] ) )
@@ -129,10 +126,7 @@ class WCOTL_Admin {
                 $wpdb->update( $table, [ 'step_voided' => 0, 'step_void_reason' => null ], [ 'id' => $step_id ] );
                 echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Step restored.', 'wc-order-timeline' ) . '</p></div>';
             }
-        }
-
-        // Edit step (POST)
-        if (
+        } elseif (
             isset( $_POST['wcotl_edit_step'], $_POST['_wpnonce_edit'], $_POST['step_id'] ) &&
             wp_verify_nonce( $_POST['_wpnonce_edit'], 'wcotl_edit_step_' . absint( $_POST['step_id'] ) )
         ) {
@@ -169,12 +163,9 @@ class WCOTL_Admin {
                 ], [ 'id' => $step_id ] );
                 echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Step updated successfully!', 'wc-order-timeline' ) . '</p></div>';
             } else {
-                echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please fill in at least Date/Time and Description.', 'wc-order-timeline' ) . '</p></div>';
+                echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please fill in a valid Date/Time and Description.', 'wc-order-timeline' ) . '</p></div>';
             }
-        }
-
-        // Delete tracking code (all steps and metadata)
-        if (
+        } elseif (
             isset( $_GET['action'], $_GET['tracking_code'], $_GET['_wpnonce'] ) &&
             $_GET['action'] === 'delete_code' &&
             wp_verify_nonce( $_GET['_wpnonce'], 'wcotl_delete_code' )
