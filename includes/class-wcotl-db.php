@@ -71,6 +71,11 @@ class WCOTL_DB {
 
     public static function maybe_upgrade() {
         if ( get_option( 'wcotl_db_version' ) !== '1.5.1' ) {
+            if ( get_transient( 'wcotl_db_upgrade_lock' ) ) {
+                return;
+            }
+            set_transient( 'wcotl_db_upgrade_lock', 1, HOUR_IN_SECONDS );
+
             WCOTL_DB::activate();
             // Migrate: add columns that may not exist in older installs.
             global $wpdb;
@@ -104,6 +109,10 @@ class WCOTL_DB {
                     }
                 }
             }
+
+            delete_transient( 'wcotl_db_upgrade_lock' );
+        }
+    }
 
     public static function get_meta( $tracking_code, $key ) {
         global $wpdb;
