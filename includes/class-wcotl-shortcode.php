@@ -75,7 +75,7 @@ class WCOTL_Shortcode {
     }
 
     /**
-     * Check if client IP has exceeded the allowed rate limit window.
+     * Increment and check rate limit for a client IP.
      *
      * @param string $client_ip
      * @param int    $max_requests
@@ -84,7 +84,6 @@ class WCOTL_Shortcode {
     public static function check_rate_limit( $client_ip, $max_requests = 15 ) {
         $transient_key = 'wcotl_rate_' . md5( $client_ip );
         $current_count = (int) get_transient( $transient_key );
-
         $current_count++;
         set_transient( $transient_key, $current_count, 60 );
 
@@ -128,13 +127,12 @@ class WCOTL_Shortcode {
                     self::reset_rate_limit( $client_ip );
                     $is_rate_limited = false;
                 } else {
+                    self::check_rate_limit( $client_ip, $max_requests );
                     $error          = __( 'Security verification failed. Please complete the challenge and try again.', 'wc-order-timeline' );
                     $show_turnstile = true;
                 }
             } else {
-                $current_count++;
-                set_transient( $transient_key, $current_count, 60 );
-                $is_rate_limited = ( $current_count > $max_requests );
+                $is_rate_limited = self::check_rate_limit( $client_ip, $max_requests );
 
                 if ( $is_rate_limited ) {
                     if ( $turnstile_active ) {
