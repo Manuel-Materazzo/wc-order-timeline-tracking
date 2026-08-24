@@ -26,6 +26,7 @@ class WCOTL_Admin_Presets {
                 wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
             }
             $wpdb->delete( $t, [ 'id' => absint( $_GET['preset_id'] ) ] );
+            WCOTL_DB::clear_presets_cache();
             $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Preset deleted.', 'wc-order-timeline' ) . '</p></div>';
         }
 
@@ -51,6 +52,7 @@ class WCOTL_Admin_Presets {
                     'step_icon'   => $icon,
                     'sort_order'  => $order,
                 ], [ 'id' => $pid ] );
+                WCOTL_DB::clear_presets_cache();
                 $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Preset updated.', 'wc-order-timeline' ) . '</p></div>';
             } else {
                 $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Name and Step Description are required.', 'wc-order-timeline' ) . '</p></div>';
@@ -78,6 +80,7 @@ class WCOTL_Admin_Presets {
                     'step_icon'   => $icon,
                     'sort_order'  => $order,
                 ] );
+                WCOTL_DB::clear_presets_cache();
                 $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Preset created successfully.', 'wc-order-timeline' ) . '</p></div>';
             } else {
                 $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Name and Step Description are required.', 'wc-order-timeline' ) . '</p></div>';
