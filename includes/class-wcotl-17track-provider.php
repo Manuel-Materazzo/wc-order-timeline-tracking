@@ -205,6 +205,7 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
         $url      = self::BASE_URL . $endpoint;
         $response = wp_remote_post( $url, [
             'timeout'     => 20,
+            'httpversion' => '1.1',
             'headers'     => [
                 '17token'      => $this->api_key,
                 'Content-Type' => 'application/json',
@@ -213,7 +214,7 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
             'data_format' => 'body',
         ] );
 
-        return $this->parse_response( $response );
+        return $this->parse_response( $response, $url );
     }
 
     /**
@@ -221,30 +222,46 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
      */
     private function get( string $url ) {
         $response = wp_remote_get( $url, [
-            'timeout' => 15,
-            'headers' => [
+            'timeout'     => 15,
+            'httpversion' => '1.1',
+            'headers'     => [
                 '17token' => $this->api_key,
             ],
         ] );
 
-        return $this->parse_response( $response );
+        return $this->parse_response( $response, $url );
     }
 
     /**
      * Parse a WP HTTP API response into [ 'body' => decoded_array ] | WP_Error.
+     *
+     * On non-200 responses the raw body (first 500 chars) is included in the
+     * WP_Error message so it propagates to the admin UI and debug.log.
      */
-    private function parse_response( $response ) {
+    private function parse_response( $response, string $request_url = '' ) {
         if ( is_wp_error( $response ) ) {
+            $this->debug_log( 'WP_Error: ' . $response->get_error_message()
+                . ( $request_url ? " (URL: {$request_url})" : '' ) );
             return $response;
         }
-        $code = wp_remote_retrieve_response_code( $response );
+
+        $code     = wp_remote_retrieve_response_code( $response );
+        $body_raw = wp_remote_retrieve_body( $response );
+
         if ( $code !== 200 ) {
-            return new WP_Error( '17track_http', "17TRACK HTTP {$code}" );
+            // Truncate the body so the error message stays readable.
+            $body_snippet = mb_substr( $body_raw, 0, 500 );
+            $message      = "17TRACK HTTP {$code} — body: {$body_snippet}";
+            $this->debug_log( $message . ( $request_url ? " (URL: {$request_url})" : '' ) );
+            return new WP_Error( '17track_http', $message );
         }
-        $decoded = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        $decoded = json_decode( $body_raw, true );
         if ( json_last_error() !== JSON_ERROR_NONE ) {
-            return new WP_Error( '17track_json', 'Invalid JSON from 17TRACK.' );
+            $this->debug_log( 'Invalid JSON from 17TRACK: ' . mb_substr( $body_raw, 0, 300 ) );
+            return new WP_Error( '17track_json', 'Invalid JSON from 17TRACK: ' . mb_substr( $body_raw, 0, 200 ) );
         }
+
         return [ 'body' => $decoded ];
     }
 
@@ -273,5 +290,15 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
             'raw'     => [],
             'error'   => $message,
         ];
+    }
+
+    /**
+     * Write a debug message to the WP error log when WP_DEBUG_LOG is active.
+     */
+    private function debug_log( string $message ): void {
+        if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+            error_log( '[WCOTL 17TRACK] ' . $message );
+        }
     }
 }
