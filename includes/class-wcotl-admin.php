@@ -905,8 +905,8 @@ class WCOTL_Admin {
                                        title="Restore step">↩ Restore</a>
                                 <?php endif; ?>
                                 <a href="<?php echo esc_url($del); ?>"
-                                   class="button button-link-delete button-small"
-                                   onclick="return confirm('Delete this step?')" title="Delete">✕</a>
+                                    class="button button-link-delete button-small"
+                                    onclick="return confirm('Delete this step?')" title="Delete">✕</a>
                             </div>
                         </div>
 
@@ -920,7 +920,7 @@ class WCOTL_Admin {
                                 <div class="wcotl-form-row">
                                     <label>Date and Time <span style="color:#c0392b">*</span></label>
                                     <input type="datetime-local" name="step_date"
-                                           value="<?php echo esc_attr($dt->format('Y-m-d\TH:i')); ?>" required>
+                                           value="<?php echo esc_attr($input_date_val); ?>" required>
                                 </div>
                                 <div class="wcotl-form-row">
                                     <label>Step description <span style="color:#c0392b">*</span></label>
@@ -1107,7 +1107,7 @@ class WCOTL_Admin {
                     <?php wp_nonce_field('wcotl_create_code'); ?>
                     <input type="hidden" name="wcotl_create_code" value="1">
                     <?php if ( $order_id ) : ?>
-                        <input type="hidden" name="order_id" value="<?php echo $order_id; ?>">
+                        <input type="hidden" name="order_id" value="<?php echo esc_attr( $order_id ); ?>">
                     <?php endif; ?>
                     <div class="wcotl-form-row">
                         <label>Tracking code</label>
@@ -1115,7 +1115,7 @@ class WCOTL_Admin {
                                placeholder="e.g. TRK-20240518-001" required style="font-family:monospace;">
                     </div>
                     <?php if ( $order_id ) : ?>
-                        <p style="font-size:12px;color:#008a20;margin-bottom:16px;">✓ Will be automatically associated with order <strong>#<?php echo $order_id; ?></strong>.</p>
+                        <p style="font-size:12px;color:#008a20;margin-bottom:16px;">✓ Will be automatically associated with order <strong>#<?php echo esc_html( $order_id ); ?></strong>.</p>
                     <?php endif; ?>
                     <button type="submit" class="button button-primary" style="width:100%;">Create & start adding steps</button>
                 </form>
