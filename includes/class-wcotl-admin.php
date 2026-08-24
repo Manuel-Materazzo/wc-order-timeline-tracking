@@ -187,7 +187,9 @@ class WCOTL_Admin {
              ORDER BY last_update DESC"
         );
 
-        $view_code = isset( $_GET['view'] ) ? sanitize_text_field( $_GET['view'] ) : '';
+        $view_code = isset( $_GET['view'] ) ? sanitize_text_field( wp_unslash( $_GET['view'] ) ) : '';
+        $date_format = get_option( 'date_format', 'd/m/Y' );
+        $time_format = get_option( 'time_format', 'H:i' );
         ?>
         <div class="wrap wcotl-admin">
             <h1>
