@@ -292,9 +292,14 @@ class WCOTL_Shortcode {
                     <span class="wcotl-tracking-badge__code"><?php echo esc_html( $code ); ?></span>
                 </div>
 
+                <?php
+                $site_date_format = get_option( 'date_format', 'd/m/Y' );
+                $site_time_format = get_option( 'time_format', 'H:i' );
+                ?>
+
                 <?php if ( ! empty( $delivered_at ) ) :
-                    $dd = DateTime::createFromFormat( 'Y-m-d', $delivered_at );
-                    $dd_label = $dd ? $dd->format('d/m/Y') : esc_html( $delivered_at );
+                    $dd_ts = strtotime( $delivered_at );
+                    $dd_label = $dd_ts ? wp_date( $site_date_format, $dd_ts ) : esc_html( $delivered_at );
                 ?>
                 <div class="wcotl-delivered">
                     <div class="wcotl-delivered__icon">
@@ -306,8 +311,8 @@ class WCOTL_Shortcode {
                     </div>
                 </div>
                 <?php elseif ( ! empty( $estimated_delivery ) ) :
-                    $ed = DateTime::createFromFormat( 'Y-m-d', $estimated_delivery );
-                    $ed_label = $ed ? $ed->format('d/m/Y') : esc_html( $estimated_delivery );
+                    $ed_ts = strtotime( $estimated_delivery );
+                    $ed_label = $ed_ts ? wp_date( $site_date_format, $ed_ts ) : esc_html( $estimated_delivery );
                 ?>
                 <div class="wcotl-delivery">
                     <div class="wcotl-delivery__icon">
@@ -325,9 +330,22 @@ class WCOTL_Shortcode {
                         $icon_key  = sanitize_key( $step->step_icon ?: 'truck' );
                         $icon_svg  = isset( $icons[ $icon_key ] ) ? $icons[ $icon_key ] : $icons['truck'];
                         $delay     = $i * 80; // ms
-                        $dt        = new DateTime( $step->step_date );
-                        $date_fmt  = $dt->format( 'd/m/Y' );
-                        $time_fmt  = $dt->format( 'H:i' );
+
+                        $step_ts = strtotime( $step->step_date );
+                        if ( $step_ts !== false ) {
+                            $date_fmt = wp_date( $site_date_format, $step_ts );
+                            $time_fmt = wp_date( $site_time_format, $step_ts );
+                        } else {
+                            try {
+                                $dt       = new DateTime( $step->step_date );
+                                $date_fmt = wp_date( $site_date_format, $dt->getTimestamp() );
+                                $time_fmt = wp_date( $site_time_format, $dt->getTimestamp() );
+                            } catch ( Exception $e ) {
+                                $date_fmt = esc_html( $step->step_date );
+                                $time_fmt = '';
+                            }
+                        }
+
                         $is_voided = ! empty( $step->step_voided );
                         // "last active" = l'ultimo step NON annullato
                         $last_active = false;
@@ -345,7 +363,7 @@ class WCOTL_Shortcode {
                             <?php endif; ?>
                         </div>
                         <div class="wcotl-step__body">
-                            <div class="wcotl-step__date"><?php echo esc_html( $date_fmt ); ?> &nbsp;·&nbsp; <?php echo esc_html( $time_fmt ); ?></div>
+                            <div class="wcotl-step__date"><?php echo esc_html( $date_fmt ); ?><?php if ( $time_fmt !== '' ) : ?> &nbsp;·&nbsp; <?php echo esc_html( $time_fmt ); ?><?php endif; ?></div>
                             <div class="wcotl-step__label"><?php echo esc_html( $step->step_label ); ?></div>
                             <?php if ( ! empty( $step->step_note ) ) : ?>
                                 <div class="wcotl-step__note"><?php echo nl2br( esc_html( $step->step_note ) ); ?></div>
