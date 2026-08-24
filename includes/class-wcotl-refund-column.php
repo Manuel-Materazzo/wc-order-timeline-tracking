@@ -9,7 +9,12 @@ class WCOTL_Refund_Column {
     public static function init() {
         add_filter( 'manage_edit-shop_order_columns', array( __CLASS__, 'add_column_cpt' ), 20 );
         add_action( 'manage_shop_order_posts_custom_column', array( __CLASS__, 'render_column_cpt' ), 10, 2 );
-        add_filter( 'the_posts', array( __CLASS__, 'prime_orders_cache_cpt' ), 10, 2 );
+
+        add_action( 'current_screen', function( $screen ) {
+            if ( $screen && $screen->id === 'edit-shop_order' ) {
+                add_filter( 'the_posts', array( 'WCOTL_Refund_Column', 'prime_orders_cache_cpt' ), 10, 2 );
+            }
+        } );
 
         add_filter( 'woocommerce_shop_order_list_table_columns', array( __CLASS__, 'add_column_hpos' ), 20 );
         add_action( 'woocommerce_shop_order_list_table_custom_column', array( __CLASS__, 'render_column_hpos' ), 10, 2 );
@@ -118,14 +123,21 @@ class WCOTL_Refund_Column {
     public static function render_cell( $order_id ) {
         $delivered_at = WCOTL_DB::get_delivered_at_for_order( $order_id );
 
-        if ( ! $delivered_at ) {
+        if ( empty( $delivered_at ) ) {
             // Nessuna data di consegna registrata
             echo '<span style="color:#b0aaa4;font-size:12px;">—</span>';
             return;
         }
 
-        $days_left = WCOTL_Refund_Column::days_left( $delivered_at );
-        $deadline  = ( new DateTime( $delivered_at ) )->modify( '+14 days' )->format( 'd/m/Y' );
+        $date_format = get_option( 'date_format', 'd/m/Y' );
+        $days_left   = WCOTL_Refund_Column::days_left( $delivered_at );
+        $deadline    = '';
+        try {
+            $deadline_dt = ( new DateTime( $delivered_at ) )->modify( '+14 days' );
+            $deadline    = wp_date( $date_format, $deadline_dt->getTimestamp() );
+        } catch ( Exception $e ) {
+            $deadline = esc_html( $delivered_at );
+        }
 
         if ( $days_left < 0 ) {
             // Window expired
@@ -183,12 +195,19 @@ class WCOTL_Refund_Column {
     }
 
     public static function days_left( $delivered_at, $window_days = 14 ) {
-        $delivery  = new DateTime( $delivered_at );
-        $deadline  = clone $delivery;
-        $deadline->modify( "+{$window_days} days" );
-        $today     = new DateTime( 'today' );
-        $diff      = (int) $today->diff( $deadline )->format( '%r%a' );
-        return $diff; // positivo = giorni rimasti, negativo = già scaduto
+        if ( empty( $delivered_at ) ) {
+            return 0;
+        }
+        try {
+            $delivery = new DateTime( $delivered_at );
+            $deadline = clone $delivery;
+            $deadline->modify( "+{$window_days} days" );
+            $today = new DateTime( 'today' );
+            $diff  = (int) $today->diff( $deadline )->format( '%r%a' );
+            return $diff; // positivo = giorni rimasti, negativo = già scaduto
+        } catch ( Exception $e ) {
+            return 0;
+        }
     }
 
     public static function column_styles() {
