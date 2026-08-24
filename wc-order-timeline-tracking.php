@@ -52,14 +52,6 @@ class WCOTL_Plugin {
 register_activation_hook( __FILE__, array( 'WCOTL_DB', 'activate' ) );
 register_deactivation_hook( __FILE__, array( 'WCOTL_Auto_Sync', 'deactivate' ) );
 
-/**
- * Declare compatibility with WooCommerce High-Performance Order Storage (HPOS).
- *
- * Must be hooked on `before_woocommerce_init` — that is the only moment
- * WooCommerce reads these declarations. The plugin already supports HPOS:
- * WCOTL_Refund_Column and WCOTL_Order_Metabox both handle the
- * `woocommerce_page_wc-orders` screen alongside the classic CPT screen.
- */
 add_action( 'before_woocommerce_init', function () {
     if ( class_exists( '\Automattic\WooCommerce\Utilities\FeaturesUtil' ) ) {
         \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility(
@@ -70,5 +62,13 @@ add_action( 'before_woocommerce_init', function () {
     }
 } );
 
-WCOTL_Plugin::init();
+add_action( 'plugins_loaded', function() {
+    if ( ! class_exists( 'WooCommerce' ) ) {
+        add_action( 'admin_notices', function() {
+            echo '<div class="notice notice-error"><p>' . esc_html__( 'WC Order Timeline Tracking requires WooCommerce to be installed and active.', 'wc-order-timeline' ) . '</p></div>';
+        } );
+        return;
+    }
+    WCOTL_Plugin::init();
+} );
 
