@@ -69,25 +69,34 @@ class WCOTL_Settings {
         }
         check_admin_referer( 'wcotl_settings_nonce' );
 
-        $api_key          = sanitize_text_field( wp_unslash( $_POST['wcotl_17track_api_key'] ?? '' ) );
-        $interval         = max( 1, absint( $_POST['wcotl_sync_interval'] ?? 1 ) );
-        $inactive         = max( 1, absint( $_POST['wcotl_inactivity_days'] ?? 45 ) );
-        $delete_data      = ! empty( $_POST['wcotl_delete_data_on_uninstall'] ) ? 1 : 0;
-        $turnstile_site   = sanitize_text_field( wp_unslash( $_POST['wcotl_turnstile_site_key'] ?? '' ) );
-        $turnstile_secret = sanitize_text_field( wp_unslash( $_POST['wcotl_turnstile_secret_key'] ?? '' ) );
-        $rate_limit_max   = max( 1, absint( $_POST['wcotl_rate_limit_max_requests'] ?? 15 ) );
-
-        $old_interval = (int) get_option( 'wcotl_sync_interval', 1 );
-
-        update_option( 'wcotl_17track_api_key',          $api_key );
-        update_option( 'wcotl_inactivity_days',          $inactive );
-        update_option( 'wcotl_delete_data_on_uninstall', $delete_data );
-        update_option( 'wcotl_turnstile_site_key',        $turnstile_site );
-        update_option( 'wcotl_turnstile_secret_key',      $turnstile_secret );
-        update_option( 'wcotl_rate_limit_max_requests',   $rate_limit_max );
-
-        // update_option triggers the reschedule hook if interval changed.
-        update_option( 'wcotl_sync_interval', $interval );
+        if ( isset( $_POST['wcotl_17track_api_key'] ) ) {
+            $api_key = sanitize_text_field( wp_unslash( $_POST['wcotl_17track_api_key'] ) );
+            update_option( 'wcotl_17track_api_key', $api_key );
+        }
+        if ( isset( $_POST['wcotl_sync_interval'] ) ) {
+            $interval = max( 1, absint( $_POST['wcotl_sync_interval'] ) );
+            update_option( 'wcotl_sync_interval', $interval );
+        }
+        if ( isset( $_POST['wcotl_inactivity_days'] ) ) {
+            $inactive = max( 1, absint( $_POST['wcotl_inactivity_days'] ) );
+            update_option( 'wcotl_inactivity_days', $inactive );
+        }
+        if ( isset( $_POST['wcotl_save_general_settings'] ) ) {
+            $delete_data = ! empty( $_POST['wcotl_delete_data_on_uninstall'] ) ? 1 : 0;
+            update_option( 'wcotl_delete_data_on_uninstall', $delete_data );
+        }
+        if ( isset( $_POST['wcotl_turnstile_site_key'] ) ) {
+            $turnstile_site = sanitize_text_field( wp_unslash( $_POST['wcotl_turnstile_site_key'] ) );
+            update_option( 'wcotl_turnstile_site_key', $turnstile_site );
+        }
+        if ( isset( $_POST['wcotl_turnstile_secret_key'] ) ) {
+            $turnstile_secret = sanitize_text_field( wp_unslash( $_POST['wcotl_turnstile_secret_key'] ) );
+            update_option( 'wcotl_turnstile_secret_key', $turnstile_secret );
+        }
+        if ( isset( $_POST['wcotl_rate_limit_max_requests'] ) ) {
+            $rate_limit_max = max( 1, absint( $_POST['wcotl_rate_limit_max_requests'] ) );
+            update_option( 'wcotl_rate_limit_max_requests', $rate_limit_max );
+        }
 
         wp_redirect( admin_url( 'admin.php?page=wcotl-settings&saved=1' ) );
         exit;
