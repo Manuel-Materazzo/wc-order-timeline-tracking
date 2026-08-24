@@ -140,14 +140,27 @@ class WCOTL_Admin {
                 wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
             }
             $step_id = absint( $_POST['step_id'] );
-            $label   = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ) );
+            $label   = trim( sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ) ) );
             $note    = sanitize_textarea_field( wp_unslash( $_POST['step_note'] ?? '' ) );
-            $date    = sanitize_text_field( wp_unslash( $_POST['step_date'] ?? '' ) );
+            $date    = trim( sanitize_text_field( wp_unslash( $_POST['step_date'] ?? '' ) ) );
             $icon    = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ) );
 
-            if ( $label && $date ) {
+            $dt = null;
+            if ( $date !== '' ) {
                 $dt = DateTime::createFromFormat( 'Y-m-d\TH:i', $date );
-                if ( ! $dt ) $dt = new DateTime( $date );
+                if ( ! $dt ) {
+                    $dt = DateTime::createFromFormat( 'Y-m-d H:i:s', $date );
+                }
+                if ( ! $dt ) {
+                    try {
+                        $dt = new DateTime( $date );
+                    } catch ( Exception $e ) {
+                        $dt = null;
+                    }
+                }
+            }
+
+            if ( $label && $dt ) {
                 $wpdb->update( $table, [
                     'step_date'  => $dt->format('Y-m-d H:i:s'),
                     'step_label' => $label,
@@ -297,14 +310,27 @@ class WCOTL_Admin {
                 wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
             }
             $step_id = absint( $_POST['step_id'] );
-            $label   = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ) );
+            $label   = trim( sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ) ) );
             $note    = sanitize_textarea_field( wp_unslash( $_POST['step_note'] ?? '' ) );
-            $date    = sanitize_text_field( wp_unslash( $_POST['step_date'] ?? '' ) );
+            $date    = trim( sanitize_text_field( wp_unslash( $_POST['step_date'] ?? '' ) ) );
             $icon    = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ) );
 
-            if ( $label && $date ) {
+            $dt = null;
+            if ( $date !== '' ) {
                 $dt = DateTime::createFromFormat( 'Y-m-d\TH:i', $date );
-                if ( ! $dt ) $dt = new DateTime( $date );
+                if ( ! $dt ) {
+                    $dt = DateTime::createFromFormat( 'Y-m-d H:i:s', $date );
+                }
+                if ( ! $dt ) {
+                    try {
+                        $dt = new DateTime( $date );
+                    } catch ( Exception $e ) {
+                        $dt = null;
+                    }
+                }
+            }
+
+            if ( $label && $dt ) {
                 $wpdb->update( $table, [
                     'step_date'  => $dt->format('Y-m-d H:i:s'),
                     'step_label' => $label,
@@ -313,7 +339,7 @@ class WCOTL_Admin {
                 ], [ 'id' => $step_id ] );
                 $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Step updated successfully!', 'wc-order-timeline' ) . '</p></div>';
             } else {
-                $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please fill in at least Date/Time and Description.', 'wc-order-timeline' ) . '</p></div>';
+                $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please fill in a valid Date/Time and Description.', 'wc-order-timeline' ) . '</p></div>';
             }
         }
 
@@ -339,15 +365,27 @@ class WCOTL_Admin {
             if ( ! current_user_can( 'manage_woocommerce' ) ) {
                 wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
             }
-            $label = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ) );
+            $label = trim( sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ) ) );
             $note  = sanitize_textarea_field( wp_unslash( $_POST['step_note'] ?? '' ) );
-            $date  = sanitize_text_field( wp_unslash( $_POST['step_date'] ?? '' ) );
+            $date  = trim( sanitize_text_field( wp_unslash( $_POST['step_date'] ?? '' ) ) );
             $icon  = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ) );
 
-            if ( $label && $date ) {
+            $dt = null;
+            if ( $date !== '' ) {
                 $dt = DateTime::createFromFormat( 'Y-m-d\TH:i', $date );
-                if ( ! $dt ) $dt = new DateTime( $date );
+                if ( ! $dt ) {
+                    $dt = DateTime::createFromFormat( 'Y-m-d H:i:s', $date );
+                }
+                if ( ! $dt ) {
+                    try {
+                        $dt = new DateTime( $date );
+                    } catch ( Exception $e ) {
+                        $dt = null;
+                    }
+                }
+            }
 
+            if ( $label && $dt ) {
                 $stored_order_id = absint( WCOTL_DB::get_meta( $code, 'order_id' ) );
 
                 $wpdb->insert( $table, [
@@ -360,7 +398,7 @@ class WCOTL_Admin {
                 ] );
                 $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Step added successfully!', 'wc-order-timeline' ) . '</p></div>';
             } else {
-                $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please fill in at least Date/Time and Description.', 'wc-order-timeline' ) . '</p></div>';
+                $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please fill in a valid Date/Time and Description.', 'wc-order-timeline' ) . '</p></div>';
             }
         }
 
