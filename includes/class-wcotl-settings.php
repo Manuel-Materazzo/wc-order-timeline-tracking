@@ -141,6 +141,13 @@ class WCOTL_Settings {
             wp_send_json_error( 'Missing tracking_code.' );
         }
 
+        global $wpdb;
+        $table = $wpdb->prefix . 'order_timeline';
+        $exists = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
+        if ( ! $exists ) {
+            wp_send_json_error( 'Unknown tracking code.' );
+        }
+
         if ( $real_number ) {
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_REAL_NUMBER,   $real_number );
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_CARRIER_CODE,  $carrier_code ?: '' );
@@ -172,6 +179,13 @@ class WCOTL_Settings {
         $tracking_code = sanitize_text_field( wp_unslash( $_POST['tracking_code'] ?? '' ) );
         if ( ! $tracking_code ) wp_send_json_error( 'Missing tracking_code.' );
 
+        global $wpdb;
+        $table = $wpdb->prefix . 'order_timeline';
+        $exists = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
+        if ( ! $exists ) {
+            wp_send_json_error( 'Unknown tracking code.' );
+        }
+
         WCOTL_Auto_Sync::sync_code( $tracking_code );
         $status = WCOTL_DB::get_meta( $tracking_code, WCOTL_Auto_Sync::META_LAST_STATUS );
         wp_send_json_success( [ 'status' => $status ] );
@@ -189,6 +203,13 @@ class WCOTL_Settings {
 
         $tracking_code = sanitize_text_field( wp_unslash( $_POST['tracking_code'] ?? '' ) );
         if ( ! $tracking_code ) wp_send_json_error( 'Missing tracking_code.' );
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'order_timeline';
+        $exists = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
+        if ( ! $exists ) {
+            wp_send_json_error( 'Unknown tracking code.' );
+        }
 
         WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_SYNC_STOPPED, '' );
         WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_STOP_REASON,  '' );
@@ -298,7 +319,7 @@ class WCOTL_Settings {
                         </label>
                     </div>
 
-                    <button type="submit" class="button button-primary" style="margin-top:16px;">
+                    <button type="submit" name="wcotl_save_general_settings" value="1" class="button button-primary" style="margin-top:16px;">
                         Save Settings
                     </button>
                 </form>
@@ -323,10 +344,6 @@ class WCOTL_Settings {
                 <form method="POST" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
                     <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
                     <input type="hidden" name="action" value="wcotl_save_settings">
-                    <input type="hidden" name="wcotl_17track_api_key" value="<?php echo esc_attr( $api_key ); ?>">
-                    <input type="hidden" name="wcotl_sync_interval" value="<?php echo esc_attr( $sync_interval ); ?>">
-                    <input type="hidden" name="wcotl_inactivity_days" value="<?php echo esc_attr( $inactivity_days ); ?>">
-                    <input type="hidden" name="wcotl_delete_data_on_uninstall" value="<?php echo esc_attr( $delete_data_on_uninstall ); ?>">
 
                     <div class="wcotl-form-row">
                         <label>
