@@ -257,6 +257,7 @@ class WCOTL_Shortcode {
                     // Preserva gli altri parametri GET (es. page id in WP)
                     foreach ( $_GET as $k => $v ) {
                         if ( $k === 'tracking' || $k === 'cf-turnstile-response' ) continue;
+                        if ( ! is_scalar( $v ) ) continue;
                         echo '<input type="hidden" name="' . esc_attr( $k ) . '" value="' . esc_attr( $v ) . '">';
                     }
                     ?>
