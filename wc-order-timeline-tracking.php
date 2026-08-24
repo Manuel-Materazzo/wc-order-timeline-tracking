@@ -32,6 +32,7 @@ require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-refund-column.php';
 // Auto-tracking
 require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-tracking-provider.php';
 require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-17track-provider.php';
+require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-packlink-provider.php';
 require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-auto-sync.php';
 require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-settings.php';
 
