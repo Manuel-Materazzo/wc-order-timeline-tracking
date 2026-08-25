@@ -166,6 +166,12 @@ class WCOTL_Settings {
         }
 
         if ( $real_number ) {
+            $prev_real_number  = WCOTL_DB::get_meta( $tracking_code, WCOTL_Auto_Sync::META_REAL_NUMBER );
+            $prev_carrier_code = (int) ( WCOTL_DB::get_meta( $tracking_code, WCOTL_Auto_Sync::META_CARRIER_CODE ) ?: 0 );
+            $prev_provider     = WCOTL_DB::get_meta( $tracking_code, WCOTL_Auto_Sync::META_PROVIDER ) ?: '17track';
+
+            $changed = ( $prev_real_number !== $real_number ) || ( $prev_carrier_code !== $carrier_code ) || ( $prev_provider !== $provider_slug );
+
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_REAL_NUMBER,  $real_number );
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_PROVIDER,     $provider_slug );
             // Carrier code is only meaningful for 17TRACK; clear it for Packlink.
@@ -174,11 +180,13 @@ class WCOTL_Settings {
             } else {
                 WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_CARRIER_CODE, $carrier_code ?: '' );
             }
-            // Reset registration so it re-registers at provider on next sync.
-            WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_REGISTERED,   '' );
-            WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_SYNC_STOPPED,  '' );
-            WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_STOP_REASON,   '' );
-            WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_LAST_STATUS,   '' );
+            if ( $changed ) {
+                // Reset registration so it re-registers at provider on next sync if details changed.
+                WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_REGISTERED,   '' );
+                WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_SYNC_STOPPED,  '' );
+                WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_STOP_REASON,   '' );
+                WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_LAST_STATUS,   '' );
+            }
             // Clear the cursor so this code is picked up on the very next cron tick.
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_NEXT_SYNC_AT,  '' );
         } else {
