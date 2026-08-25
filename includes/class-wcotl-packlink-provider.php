@@ -24,12 +24,17 @@
  *   delivered        => delivered
  *   cancelled        => expired
  */
-if ( ! defined( 'ABSPATH' ) ) exit;
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 class WCOTL_Packlink_Provider extends WCOTL_Tracking_Provider {
 
     /** API base URL */
     const BASE_URL = 'https://api.packlink.com/v1/';
+
+    /** Shipments endpoint */
+    const SHIPMENTS_ENDPOINT = 'shipments/';
 
     /**
      * Packlink shipment status string => normalised status mapping.
@@ -79,6 +84,34 @@ class WCOTL_Packlink_Provider extends WCOTL_Tracking_Provider {
     }
 
     /**
+     * Fetch raw tracking history/events from Packlink API endpoints.
+     *
+     * @param string $clean_ref
+     * @return array
+     */
+    private function fetch_raw_events( string $clean_ref ): array {
+        // 1. Try official endpoint: /shipments/{reference}/track
+        $history_resp = $this->request( self::SHIPMENTS_ENDPOINT . rawurlencode( $clean_ref ) . '/track' );
+
+        if ( is_wp_error( $history_resp ) ) {
+            // 2. Fallback to legacy /tracking-history
+            $history_resp = $this->request( self::SHIPMENTS_ENDPOINT . rawurlencode( $clean_ref ) . '/tracking-history' );
+        }
+
+        if ( ! is_wp_error( $history_resp ) ) {
+            $history = $history_resp['body'] ?? [];
+            if ( isset( $history['data'] ) && is_array( $history['data'] ) ) {
+                return $history['data'];
+            }
+            if ( is_array( $history ) && ! empty( $history ) && isset( $history[0] ) ) {
+                return $history;
+            }
+        }
+
+        return [];
+    }
+
+    /**
      * Fetch the latest tracking events for a Packlink shipment reference.
      *
      * In the Packlink PRO API:
@@ -95,12 +128,11 @@ class WCOTL_Packlink_Provider extends WCOTL_Tracking_Provider {
         $clean_ref = trim( $real_tracking_number );
 
         // 1. Fetch shipment status.
-        $shipment_resp = $this->request( 'shipments/' . rawurlencode( $clean_ref ) );
+        $shipment_resp = $this->request( self::SHIPMENTS_ENDPOINT . rawurlencode( $clean_ref ) );
         if ( is_wp_error( $shipment_resp ) ) {
-            $err_code = $shipment_resp->get_error_code();
-            $err_msg  = $shipment_resp->get_error_message();
+            $err_msg = $shipment_resp->get_error_message();
 
-            if ( strpos( $err_msg, 'HTTP 404' ) !== false ) {
+            if ( str_contains( $err_msg, 'HTTP 404' ) ) {
                 return $this->error_response(
                     sprintf(
                         'Packlink shipment reference "%s" was not found (404). Please verify that the code matches the Packlink Shipment Reference in your Packlink PRO account (e.g. ES2024...) and that your Packlink API key matches this account.',
@@ -116,24 +148,8 @@ class WCOTL_Packlink_Provider extends WCOTL_Tracking_Provider {
         $packlink_status = $shipment_body['status'] ?? $shipment_body['state'] ?? '';
         $status          = self::STATUS_MAP[ $packlink_status ] ?? 'in_transit';
 
-        // 2. Fetch tracking events using the official Packlink endpoint: /shipments/{reference}/track
-        // If /track returns 404, fallback to /tracking-history or treat as empty events.
-        $history_resp = $this->request( 'shipments/' . rawurlencode( $clean_ref ) . '/track' );
-
-        if ( is_wp_error( $history_resp ) ) {
-            // If /track gave 404, try legacy /tracking-history
-            $history_resp = $this->request( 'shipments/' . rawurlencode( $clean_ref ) . '/tracking-history' );
-        }
-
-        $raw_events = [];
-        if ( ! is_wp_error( $history_resp ) ) {
-            $history = $history_resp['body'] ?? [];
-            if ( isset( $history['data'] ) && is_array( $history['data'] ) ) {
-                $raw_events = $history['data'];
-            } elseif ( is_array( $history ) && ! empty( $history ) && isset( $history[0] ) ) {
-                $raw_events = $history;
-            }
-        }
+        // 2. Fetch tracking events.
+        $raw_events = $this->fetch_raw_events( $clean_ref );
 
         $events    = [];
         $seen_keys = [];

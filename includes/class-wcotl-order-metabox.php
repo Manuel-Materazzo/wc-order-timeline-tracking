@@ -2,15 +2,17 @@
 /**
  * WC order sidebar meta box
  */
-if ( ! defined( 'ABSPATH' ) ) exit;
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 class WCOTL_Order_Metabox {
 
-    public static function init() {
+    public static function init(): void {
         add_action( 'add_meta_boxes', array( __CLASS__, 'register' ) );
     }
 
-    public static function register() {
+    public static function register(): void {
         $screens = [ 'shop_order', 'woocommerce_page_wc-orders' ];
         foreach ( $screens as $screen ) {
             add_meta_box(
@@ -24,13 +26,13 @@ class WCOTL_Order_Metabox {
         }
     }
 
-    public static function render( $post_or_order ) {
+    public static function render( $post_or_order ): void {
         global $wpdb;
         $order_id = is_a( $post_or_order, 'WC_Order' ) ? $post_or_order->get_id() : $post_or_order->ID;
         $table    = $wpdb->prefix . 'order_timeline';
 
         $codes = $wpdb->get_col(
-            $wpdb->prepare( "SELECT DISTINCT tracking_code FROM {$table} WHERE order_id = %d", $order_id )
+            $wpdb->prepare( "SELECT DISTINCT tracking_code FROM $table WHERE order_id = %d", $order_id )
         );
         ?>
         <p style="font-size:12px;color:#888;margin-bottom:8px;">Tracking codes associated with this order:</p>

@@ -2,12 +2,109 @@
 /**
  * Presets CRUD page + AJAX
  */
-if ( ! defined( 'ABSPATH' ) ) exit;
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 class WCOTL_Admin_Presets {
 
     public static function init() {
         add_action( 'wp_ajax_wcotl_get_presets_json', array( __CLASS__, 'ajax_get_presets_json' ) );
+    }
+
+    private static function render_notice( string $type, string $message ): string {
+        return '<div class="notice notice-' . esc_attr( $type ) . ' is-dismissible"><p>' . esc_html( $message ) . '</p></div>';
+    }
+
+    private static function handle_delete( string $table ): string {
+        if (
+            ! isset( $_GET['action'], $_GET['preset_id'], $_GET['_wpnonce'] ) ||
+            $_GET['action'] !== 'delete_preset' ||
+            ! wp_verify_nonce( $_GET['_wpnonce'], 'wcotl_delete_preset' )
+        ) {
+            return '';
+        }
+
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+        }
+
+        global $wpdb;
+        $wpdb->delete( $table, [ 'id' => absint( $_GET['preset_id'] ) ] );
+        WCOTL_DB::clear_presets_cache();
+
+        return self::render_notice( 'success', __( 'Preset deleted.', 'wc-order-timeline' ) );
+    }
+
+    private static function handle_edit( string $table ): string {
+        if (
+            ! isset( $_POST['wcotl_edit_preset'], $_POST['_wpnonce_ep'], $_POST['preset_id'] ) ||
+            ! wp_verify_nonce( $_POST['_wpnonce_ep'], 'wcotl_edit_preset_' . absint( $_POST['preset_id'] ) )
+        ) {
+            return '';
+        }
+
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+        }
+
+        global $wpdb;
+        $pid   = absint( $_POST['preset_id'] );
+        $name  = sanitize_text_field( wp_unslash( $_POST['preset_name'] ?? '' ) );
+        $label = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ) );
+        $note  = sanitize_textarea_field( wp_unslash( $_POST['step_note'] ?? '' ) );
+        $icon  = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ) );
+        $order = absint( $_POST['sort_order'] ?? 0 );
+
+        if ( ! $name || ! $label ) {
+            return self::render_notice( 'error', __( 'Name and Step Description are required.', 'wc-order-timeline' ) );
+        }
+
+        $wpdb->update( $table, [
+            'preset_name' => $name,
+            'step_label'  => $label,
+            'step_note'   => $note,
+            'step_icon'   => $icon,
+            'sort_order'  => $order,
+        ], [ 'id' => $pid ] );
+        WCOTL_DB::clear_presets_cache();
+
+        return self::render_notice( 'success', __( 'Preset updated.', 'wc-order-timeline' ) );
+    }
+
+    private static function handle_create( string $table ): string {
+        if (
+            ! isset( $_POST['wcotl_add_preset'], $_POST['_wpnonce_ap'] ) ||
+            ! wp_verify_nonce( $_POST['_wpnonce_ap'], 'wcotl_add_preset' )
+        ) {
+            return '';
+        }
+
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
+        }
+
+        global $wpdb;
+        $name  = sanitize_text_field( wp_unslash( $_POST['preset_name'] ?? '' ) );
+        $label = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ) );
+        $note  = sanitize_textarea_field( wp_unslash( $_POST['step_note'] ?? '' ) );
+        $icon  = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ) );
+        $order = absint( $_POST['sort_order'] ?? 0 );
+
+        if ( ! $name || ! $label ) {
+            return self::render_notice( 'error', __( 'Name and Step Description are required.', 'wc-order-timeline' ) );
+        }
+
+        $wpdb->insert( $table, [
+            'preset_name' => $name,
+            'step_label'  => $label,
+            'step_note'   => $note,
+            'step_icon'   => $icon,
+            'sort_order'  => $order,
+        ] );
+        WCOTL_DB::clear_presets_cache();
+
+        return self::render_notice( 'success', __( 'Preset created successfully.', 'wc-order-timeline' ) );
     }
 
     public static function page() {
@@ -16,83 +113,20 @@ class WCOTL_Admin_Presets {
         $icons  = WCOTL_Icons::map();
         $notice = '';
 
-        /* ---- DELETE ---- */
-        if (
-            isset( $_GET['action'], $_GET['preset_id'], $_GET['_wpnonce'] ) &&
-            $_GET['action'] === 'delete_preset' &&
-            wp_verify_nonce( $_GET['_wpnonce'], 'wcotl_delete_preset' )
-        ) {
-            if ( ! current_user_can( 'manage_woocommerce' ) ) {
-                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
-            }
-            $wpdb->delete( $t, [ 'id' => absint( $_GET['preset_id'] ) ] );
-            WCOTL_DB::clear_presets_cache();
-            $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Preset deleted.', 'wc-order-timeline' ) . '</p></div>';
-        }
-
-        /* ---- EDIT (POST) ---- */
-        if (
-            isset( $_POST['wcotl_edit_preset'], $_POST['_wpnonce_ep'], $_POST['preset_id'] ) &&
-            wp_verify_nonce( $_POST['_wpnonce_ep'], 'wcotl_edit_preset_' . absint( $_POST['preset_id'] ) )
-        ) {
-            if ( ! current_user_can( 'manage_woocommerce' ) ) {
-                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
-            }
-            $pid   = absint( $_POST['preset_id'] );
-            $name  = sanitize_text_field( wp_unslash( $_POST['preset_name'] ?? '' ) );
-            $label = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ) );
-            $note  = sanitize_textarea_field( wp_unslash( $_POST['step_note'] ?? '' ) );
-            $icon  = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ) );
-            $order = absint( $_POST['sort_order'] ?? 0 );
-            if ( $name && $label ) {
-                $wpdb->update( $t, [
-                    'preset_name' => $name,
-                    'step_label'  => $label,
-                    'step_note'   => $note,
-                    'step_icon'   => $icon,
-                    'sort_order'  => $order,
-                ], [ 'id' => $pid ] );
-                WCOTL_DB::clear_presets_cache();
-                $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Preset updated.', 'wc-order-timeline' ) . '</p></div>';
-            } else {
-                $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Name and Step Description are required.', 'wc-order-timeline' ) . '</p></div>';
-            }
-        }
-
-        /* ---- CREATE (POST) ---- */
-        if (
-            isset( $_POST['wcotl_add_preset'], $_POST['_wpnonce_ap'] ) &&
-            wp_verify_nonce( $_POST['_wpnonce_ap'], 'wcotl_add_preset' )
-        ) {
-            if ( ! current_user_can( 'manage_woocommerce' ) ) {
-                wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
-            }
-            $name  = sanitize_text_field( wp_unslash( $_POST['preset_name'] ?? '' ) );
-            $label = sanitize_text_field( wp_unslash( $_POST['step_label'] ?? '' ) );
-            $note  = sanitize_textarea_field( wp_unslash( $_POST['step_note'] ?? '' ) );
-            $icon  = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ) );
-            $order = absint( $_POST['sort_order'] ?? 0 );
-            if ( $name && $label ) {
-                $wpdb->insert( $t, [
-                    'preset_name' => $name,
-                    'step_label'  => $label,
-                    'step_note'   => $note,
-                    'step_icon'   => $icon,
-                    'sort_order'  => $order,
-                ] );
-                WCOTL_DB::clear_presets_cache();
-                $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Preset created successfully.', 'wc-order-timeline' ) . '</p></div>';
-            } else {
-                $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Name and Step Description are required.', 'wc-order-timeline' ) . '</p></div>';
-            }
-        }
+        /* ---- Process Actions ---- */
+        $notice .= self::handle_delete( $t );
+        $notice .= self::handle_edit( $t );
+        $notice .= self::handle_create( $t );
 
         $presets   = WCOTL_DB::get_presets();
         $edit_id   = isset( $_GET['edit_preset'] ) ? absint( $_GET['edit_preset'] ) : 0;
         $edit_row  = null;
         if ( $edit_id ) {
             foreach ( $presets as $p ) {
-                if ( (int) $p->id === $edit_id ) { $edit_row = $p; break; }
+                if ( (int) $p->id === $edit_id ) {
+                    $edit_row = $p;
+                    break;
+                }
             }
         }
         ?>
@@ -223,7 +257,9 @@ class WCOTL_Admin_Presets {
 
     public static function ajax_get_presets_json() {
         check_ajax_referer( 'wcotl_admin_nonce', 'nonce' );
-        if ( ! current_user_can( 'manage_woocommerce' ) ) wp_die( 'Forbidden', 403 );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_die( 'Forbidden', 403 );
+        }
         $presets = WCOTL_DB::get_presets();
         wp_send_json_success( $presets );
     }

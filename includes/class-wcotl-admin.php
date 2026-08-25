@@ -2,17 +2,19 @@
 /**
  * Admin menu, tracking list page, view-code page
  */
-if ( ! defined( 'ABSPATH' ) ) exit;
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 class WCOTL_Admin {
 
-    public static function init() {
+    public static function init(): void {
         add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
         add_action( 'admin_head', array( __CLASS__, 'admin_styles' ) );
         add_action( 'admin_head', array( __CLASS__, 'admin_nonce_script' ) );
     }
 
-    public static function register_menu() {
+    public static function register_menu(): void {
         add_menu_page(
             'Timeline Tracking',
             'Timeline Tracking',
@@ -48,9 +50,11 @@ class WCOTL_Admin {
         );
     }
 
-    public static function admin_styles() {
+    public static function admin_styles(): void {
         $screen = get_current_screen();
-        if ( ! $screen || strpos( $screen->id, 'wcotl' ) === false ) return;
+        if ( ! $screen || ! str_contains( $screen->id, 'wcotl' ) ) {
+            return;
+        }
         ?>
         <style>
         .wcotl-admin { max-width: 980px; }
@@ -82,9 +86,11 @@ class WCOTL_Admin {
         <?php
     }
 
-    public static function admin_nonce_script() {
+    public static function admin_nonce_script(): void {
         $screen = get_current_screen();
-        if ( ! $screen || strpos( $screen->id, 'wcotl' ) === false ) return;
+        if ( ! $screen || ! str_contains( $screen->id, 'wcotl' ) ) {
+            return;
+        }
         ?>
         <script>
         var WCOTL_AJAX = {
@@ -95,7 +101,7 @@ class WCOTL_Admin {
         <?php
     }
 
-    public static function page_list() {
+    public static function page_list(): void {
         global $wpdb;
         $table = $wpdb->prefix . 'order_timeline';
 
@@ -257,7 +263,7 @@ class WCOTL_Admin {
         <?php
     }
 
-    public static function page_view_code( $code ) {
+    public static function page_view_code( $code ): void {
         global $wpdb;
         $table  = $wpdb->prefix . 'order_timeline';
         $notice = '';
@@ -1185,7 +1191,7 @@ class WCOTL_Admin {
         <?php
     }
 
-    public static function page_new_code() {
+    public static function page_new_code(): void {
         $notice = '';
 
         if ( isset( $_POST['wcotl_create_code'], $_POST['_wpnonce'] ) && wp_verify_nonce( $_POST['_wpnonce'], 'wcotl_create_code' ) ) {

@@ -13,12 +13,16 @@
  * WC tested up to:   9.9
  */
 
-if ( ! defined( 'ABSPATH' ) ) exit;
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
-define( 'WCOTL_VERSION', '1.5.0' );
-define( 'WCOTL_PLUGIN_FILE', __FILE__ );
+const WCOTL_VERSION     = '1.5.0';
+const WCOTL_PLUGIN_FILE = __FILE__;
 define( 'WCOTL_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WCOTL_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+
+use Automattic\WooCommerce\Utilities\FeaturesUtil;
 
 // Core
 require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-db.php';
@@ -37,7 +41,7 @@ require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-auto-sync.php';
 require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-settings.php';
 
 class WCOTL_Plugin {
-    public static function init() {
+    public static function init(): void {
         WCOTL_DB::init();
         WCOTL_Shortcode::init();
         WCOTL_Admin::init();
@@ -57,8 +61,8 @@ register_activation_hook( __FILE__, function() {
 register_deactivation_hook( __FILE__, array( 'WCOTL_Auto_Sync', 'deactivate' ) );
 
 add_action( 'before_woocommerce_init', function () {
-    if ( class_exists( '\Automattic\WooCommerce\Utilities\FeaturesUtil' ) ) {
-        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility(
+    if ( class_exists( FeaturesUtil::class ) ) {
+        FeaturesUtil::declare_compatibility(
             'custom_order_tables', // HPOS feature key
             __FILE__,
             true                   // true = compatible

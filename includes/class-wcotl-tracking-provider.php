@@ -6,7 +6,9 @@
  * This abstraction allows future providers (e.g. Aftership, Parcel Monitor)
  * to be added alongside 17track without touching the sync engine.
  */
-if ( ! defined( 'ABSPATH' ) ) exit;
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 abstract class WCOTL_Tracking_Provider {
 
@@ -25,7 +27,7 @@ abstract class WCOTL_Tracking_Provider {
     abstract public function is_configured(): bool;
 
     /**
-     * Register a shipment with the provider so it starts tracking.
+     * Register a shipment with the provider to start tracking.
      *
      * @param string   $real_tracking_number  Carrier tracking number (e.g. "RR123456789CN").
      * @param int|null $carrier_code          Provider-specific carrier numeric code (null = auto-detect).
@@ -38,13 +40,7 @@ abstract class WCOTL_Tracking_Provider {
      *
      * @param string $real_tracking_number
      * @param int    $carrier_code  Provider-specific carrier code (0 = auto).
-     * @return array{
-     *   success: bool,
-     *   status:  string,       // normalised status: 'in_transit'|'delivered'|'expired'|'not_found'|'error'
-     *   events:  array,        // [ ['date'=>'Y-m-d H:i:s', 'label'=>string, 'location'=>string|null] ]
-     *   raw:     array,        // raw provider response for debugging
-     *   error:   string|null
-     * }
+     * @return array<string, mixed>
      */
     abstract public function get_tracking_info( string $real_tracking_number, int $carrier_code = 0 ): array;
 

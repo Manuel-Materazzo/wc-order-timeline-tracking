@@ -21,7 +21,9 @@
  *   40  = Delivered
  *   50  = Returned
  */
-if ( ! defined( 'ABSPATH' ) ) exit;
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
 
@@ -69,6 +71,10 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
 
     /**
      * Register a shipment with 17TRACK.
+     *
+     * @param string   $real_tracking_number Carrier tracking number.
+     * @param int|null $carrier_code         Provider-specific carrier code (null = auto-detect).
+     * @return array{success:bool, carrier_code:int|null, error:string|null}
      */
     public function register_shipment( string $real_tracking_number, ?int $carrier_code = null ): array {
         $payload = [ [ 'number' => $real_tracking_number ] ];
@@ -87,18 +93,27 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
         // Check accepted list
         $accepted = $body['data']['accepted'] ?? [];
         if ( ! empty( $accepted ) ) {
-            $carrier = isset( $accepted[0]['carrier'] ) ? (int) $accepted[0]['carrier'] : null;
-            return [ 'success' => true, 'carrier_code' => $carrier, 'error' => null ];
+            return [
+                'success'      => true,
+                'carrier_code' => isset( $accepted[0]['carrier'] ) ? (int) $accepted[0]['carrier'] : null,
+                'error'        => null,
+            ];
         }
 
         // Rejected
-        $rejected = $body['data']['rejected'] ?? [];
-        $err_msg  = $rejected[0]['error']['message'] ?? 'Registration rejected by 17TRACK.';
-        return [ 'success' => false, 'carrier_code' => null, 'error' => $err_msg ];
+        return [
+            'success'      => false,
+            'carrier_code' => null,
+            'error'        => $body['data']['rejected'][0]['error']['message'] ?? 'Registration rejected by 17TRACK.',
+        ];
     }
 
     /**
      * Fetch latest tracking events.
+     *
+     * @param string $real_tracking_number Carrier tracking number.
+     * @param int    $carrier_code         Provider-specific carrier code (0 = auto).
+     * @return array{success:bool, status:string, events:array, raw:array, error:string|null}
      */
     public function get_tracking_info( string $real_tracking_number, int $carrier_code = 0 ): array {
         $payload_item = [ 'number' => $real_tracking_number ];
@@ -112,37 +127,51 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
             return $this->error_response( $response->get_error_message() );
         }
 
-        $body       = $response['body'] ?? [];
-        $accepted   = $body['data']['accepted'] ?? [];
-        $track_data = $accepted[0] ?? null;
-
-        if ( ! $track_data ) {
-            $rejected = $body['data']['rejected'] ?? [];
-            $err      = $rejected[0]['error']['message'] ?? 'No data from 17TRACK.';
-            return $this->error_response( $err );
+        $body     = $response['body'] ?? [];
+        $accepted = $body['data']['accepted'] ?? [];
+        if ( empty( $accepted[0] ) ) {
+            return $this->error_response( $body['data']['rejected'][0]['error']['message'] ?? 'No data from 17TRACK.' );
         }
 
-        // v2.4: accepted[0].track_info.latest_status.status → string e.g. "InTransit", "Delivered"
+        $track_data = $accepted[0];
         $track_info = $track_data['track_info'] ?? [];
         $status_raw = $track_info['latest_status']['status'] ?? 'NotFound';
-        $status     = self::STATUS_MAP[ $status_raw ] ?? 'in_transit';
 
-        // v2.4: accepted[0].track_info.tracking.providers[*].events[]
+        return [
+            'success' => true,
+            'status'  => self::STATUS_MAP[ $status_raw ] ?? 'in_transit',
+            'events'  => $this->extract_events( $track_info['tracking']['providers'] ?? [] ),
+            'raw'     => $track_data,
+            'error'   => null,
+        ];
+    }
+
+    /**
+     * Extract and deduplicate tracking events from provider data.
+     *
+     * @param array $providers
+     * @return array
+     */
+    private function extract_events( array $providers ): array {
         $events    = [];
         $seen_keys = [];
-        $providers = $track_info['tracking']['providers'] ?? [];
+
         foreach ( $providers as $provider ) {
             foreach ( $provider['events'] ?? [] as $ev ) {
-                // Prefer time_iso (has timezone); fall back to time_utc
                 $time_str = $ev['time_iso'] ?? $ev['time_utc'] ?? '';
                 $date     = $this->parse_17track_date( $time_str );
-                if ( ! $date ) continue;
-                $label = sanitize_text_field( $ev['description'] ?? '' );
-                if ( empty( $label ) ) continue;
-                // Deduplicate across providers
+                $label    = sanitize_text_field( $ev['description'] ?? '' );
+
+                if ( ! $date || empty( $label ) ) {
+                    continue;
+                }
+
                 $key = $date . '|' . $label;
-                if ( isset( $seen_keys[ $key ] ) ) continue;
+                if ( isset( $seen_keys[ $key ] ) ) {
+                    continue;
+                }
                 $seen_keys[ $key ] = true;
+
                 $events[] = [
                     'date'     => $date,
                     'label'    => $label,
@@ -155,18 +184,15 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
 
         usort( $events, fn( $a, $b ) => strcmp( $a['date'], $b['date'] ) );
 
-        return [
-            'success' => true,
-            'status'  => $status,
-            'events'  => $events,
-            'raw'     => $track_data,
-            'error'   => null,
-        ];
+        return $events;
     }
 
     /**
      * Auto-detect carriers for a given tracking number.
      * Uses the /listsearchisomerge endpoint.
+     *
+     * @param string $real_tracking_number
+     * @return array<int, string> Map of carrier_code => carrier_name
      */
     public function detect_carriers( string $real_tracking_number ): array {
         $url      = self::BASE_URL . 'listsearchisomerge?number=' . rawurlencode( $real_tracking_number );
@@ -225,6 +251,9 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
 
     /**
      * GET request to 17TRACK API.
+     *
+     * @param string $url
+     * @return array{body:array}|WP_Error
      */
     private function get( string $url ) {
         $response = wp_remote_get( $url, [
@@ -243,6 +272,10 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
      *
      * On non-200 responses the raw body (first 500 chars) is included in the
      * WP_Error message so it propagates to the admin UI and debug.log.
+     *
+     * @param array|WP_Error $response
+     * @param string         $request_url
+     * @return array{body:array}|WP_Error
      */
     private function parse_response( $response, string $request_url = '' ) {
         if ( is_wp_error( $response ) ) {
@@ -274,9 +307,14 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
     /**
      * Parse a 17TRACK datetime string to MySQL datetime.
      * 17TRACK returns dates in ISO 8601 or custom formats.
+     *
+     * @param string $raw
+     * @return string|null
      */
     private function parse_17track_date( string $raw ): ?string {
-        if ( empty( $raw ) ) return null;
+        if ( empty( $raw ) ) {
+            return null;
+        }
         try {
             $dt = new DateTime( $raw );
             if ( function_exists( 'wp_timezone' ) ) {
@@ -288,6 +326,12 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
         }
     }
 
+    /**
+     * Build standard error response array.
+     *
+     * @param string $message
+     * @return array{success:bool, status:string, events:array, raw:array, error:string}
+     */
     private function error_response( string $message ): array {
         return [
             'success' => false,
@@ -300,6 +344,9 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
 
     /**
      * Write a debug message to the WP error log when WP_DEBUG_LOG is active.
+     *
+     * @param string $message
+     * @return void
      */
     private function debug_log( string $message ): void {
         if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
@@ -308,3 +355,4 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
         }
     }
 }
+

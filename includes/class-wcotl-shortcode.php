@@ -2,11 +2,13 @@
 /**
  * Frontend shortcode
  */
-if ( ! defined( 'ABSPATH' ) ) exit;
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 class WCOTL_Shortcode {
 
-    public static function init() {
+    public static function init(): void {
         add_shortcode( 'wc_order_timeline_tracking', array( __CLASS__, 'render' ) );
         add_action( 'wp_enqueue_scripts', array( __CLASS__, 'register_assets' ) );
     }
@@ -14,7 +16,7 @@ class WCOTL_Shortcode {
     /**
      * Register frontend assets for the tracking shortcode.
      */
-    public static function register_assets() {
+    public static function register_assets(): void {
         wp_register_style(
             'wcotl-frontend',
             WCOTL_PLUGIN_URL . 'assets/css/wcotl-frontend.css',
@@ -28,7 +30,7 @@ class WCOTL_Shortcode {
      *
      * @return string
      */
-    public static function get_client_ip() {
+    public static function get_client_ip(): string {
         $ip = '';
         if ( ! empty( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) {
             $ip = sanitize_text_field( wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ) );
@@ -49,7 +51,7 @@ class WCOTL_Shortcode {
      * @param string $client_ip
      * @return bool
      */
-    public static function verify_turnstile( $token, $client_ip = '' ) {
+    public static function verify_turnstile( string $token, string $client_ip = '' ): bool {
         $secret_key = get_option( 'wcotl_turnstile_secret_key', '' );
         if ( empty( $secret_key ) || empty( $token ) ) {
             return false;
@@ -81,13 +83,13 @@ class WCOTL_Shortcode {
      * @param int    $max_requests
      * @return bool True if rate limited, false otherwise.
      */
-    public static function check_rate_limit( $client_ip, $max_requests = 15 ) {
+    public static function check_rate_limit( string $client_ip, int $max_requests = 15 ): bool {
         $transient_key = 'wcotl_rate_' . md5( $client_ip );
         $current_count = (int) get_transient( $transient_key );
         $current_count++;
         set_transient( $transient_key, $current_count, 60 );
 
-        return ( $current_count > $max_requests );
+        return $current_count > $max_requests;
     }
 
     /**
@@ -95,7 +97,7 @@ class WCOTL_Shortcode {
      *
      * @param string $client_ip
      */
-    public static function reset_rate_limit( $client_ip ) {
+    public static function reset_rate_limit( string $client_ip ): void {
         $transient_key = 'wcotl_rate_' . md5( $client_ip );
         delete_transient( $transient_key );
     }
@@ -105,7 +107,7 @@ class WCOTL_Shortcode {
      *
      * @return array
      */
-    public static function get_allowed_svg_tags() {
+    public static function get_allowed_svg_tags(): array {
         return [
             'svg' => [
                 'viewbox'        => true,
@@ -167,7 +169,7 @@ class WCOTL_Shortcode {
         ];
     }
 
-    public static function render() {
+    public static function render(): string {
         ob_start();
 
         $site_key         = get_option( 'wcotl_turnstile_site_key', '' );
@@ -217,7 +219,7 @@ class WCOTL_Shortcode {
 
                 $steps = $wpdb->get_results(
                     $wpdb->prepare(
-                        "SELECT * FROM {$table} WHERE tracking_code = %s ORDER BY step_date ASC",
+                        "SELECT * FROM $table WHERE tracking_code = %s ORDER BY step_date ASC",
                         $code
                     )
                 );
@@ -256,8 +258,12 @@ class WCOTL_Shortcode {
                     <?php
                     // Preserva gli altri parametri GET (es. page id in WP)
                     foreach ( $_GET as $k => $v ) {
-                        if ( $k === 'tracking' || $k === 'cf-turnstile-response' ) continue;
-                        if ( ! is_scalar( $v ) ) continue;
+                        if ( $k === 'tracking' || $k === 'cf-turnstile-response' ) {
+                            continue;
+                        }
+                        if ( ! is_scalar( $v ) ) {
+                            continue;
+                        }
                         echo '<input type="hidden" name="' . esc_attr( $k ) . '" value="' . esc_attr( $v ) . '">';
                     }
                     ?>
@@ -386,7 +392,7 @@ class WCOTL_Shortcode {
         </div>
     </div>
     <?php
-    return ob_get_clean();
+    return (string) ob_get_clean();
 }
 
 }

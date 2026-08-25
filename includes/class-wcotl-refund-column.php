@@ -2,11 +2,13 @@
 /**
  * Refund window column in order list
  */
-if ( ! defined( 'ABSPATH' ) ) exit;
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 class WCOTL_Refund_Column {
 
-    public static function init() {
+    public static function init(): void {
         add_filter( 'manage_edit-shop_order_columns', array( __CLASS__, 'add_column_cpt' ), 20 );
         add_action( 'manage_shop_order_posts_custom_column', array( __CLASS__, 'render_column_cpt' ), 10, 2 );
 
@@ -30,7 +32,7 @@ class WCOTL_Refund_Column {
      * @param WP_Query|null $query
      * @return array
      */
-    public static function prime_orders_cache_cpt( $posts, $query = null ) {
+    public static function prime_orders_cache_cpt( array $posts, $query = null ): array {
         if ( ! is_admin() || empty( $posts ) || ! is_array( $posts ) ) {
             return $posts;
         }
@@ -61,7 +63,7 @@ class WCOTL_Refund_Column {
      * @param array $orders
      * @return array
      */
-    public static function prime_orders_cache_hpos( $orders ) {
+    public static function prime_orders_cache_hpos( array $orders ): array {
         if ( empty( $orders ) || ! is_array( $orders ) ) {
             return $orders;
         }
@@ -84,7 +86,7 @@ class WCOTL_Refund_Column {
         return $orders;
     }
 
-    public static function add_column_cpt( $columns ) {
+    public static function add_column_cpt( array $columns ): array {
         // Inserisce la colonna dopo "order_status" se presente, altrimenti in fondo
         $pos = array_search( 'order_status', array_keys( $columns ), true );
         if ( $pos !== false ) {
@@ -97,12 +99,14 @@ class WCOTL_Refund_Column {
         return $columns;
     }
 
-    public static function render_column_cpt( $column, $post_id ) {
-        if ( $column !== 'wcotl_refund_window' ) return;
+    public static function render_column_cpt( string $column, $post_id ): void {
+        if ( $column !== 'wcotl_refund_window' ) {
+            return;
+        }
         WCOTL_Refund_Column::render_cell( $post_id );
     }
 
-    public static function add_column_hpos( $columns ) {
+    public static function add_column_hpos( array $columns ): array {
         $pos = array_search( 'order_status', array_keys( $columns ), true );
         if ( $pos !== false ) {
             $pos++;
@@ -114,13 +118,15 @@ class WCOTL_Refund_Column {
         return $columns;
     }
 
-    public static function render_column_hpos( $column, $order ) {
-        if ( $column !== 'wcotl_refund_window' ) return;
+    public static function render_column_hpos( string $column, $order ): void {
+        if ( $column !== 'wcotl_refund_window' ) {
+            return;
+        }
         $order_id = is_a( $order, 'WC_Order' ) ? $order->get_id() : (int) $order;
         WCOTL_Refund_Column::render_cell( $order_id );
     }
 
-    public static function render_cell( $order_id ) {
+    public static function render_cell( $order_id ): void {
         $delivered_at = WCOTL_DB::get_delivered_at_for_order( $order_id );
 
         if ( empty( $delivered_at ) ) {
@@ -194,14 +200,14 @@ class WCOTL_Refund_Column {
         );
     }
 
-    public static function days_left( $delivered_at, $window_days = 14 ) {
+    public static function days_left( $delivered_at, int $window_days = 14 ): int {
         if ( empty( $delivered_at ) ) {
             return 0;
         }
         try {
             $delivery = new DateTime( $delivered_at );
             $deadline = clone $delivery;
-            $deadline->modify( "+{$window_days} days" );
+            $deadline->modify( "+$window_days days" );
             $today = new DateTime( 'today' );
             $diff  = (int) $today->diff( $deadline )->format( '%r%a' );
             return $diff; // positivo = giorni rimasti, negativo = già scaduto
@@ -210,14 +216,18 @@ class WCOTL_Refund_Column {
         }
     }
 
-    public static function column_styles() {
+    public static function column_styles(): void {
         $screen = get_current_screen();
-        if ( ! $screen ) return;
+        if ( ! $screen ) {
+            return;
+        }
         $is_orders_screen = (
             $screen->id === 'edit-shop_order' ||
             $screen->id === 'woocommerce_page_wc-orders'
         );
-        if ( ! $is_orders_screen ) return;
+        if ( ! $is_orders_screen ) {
+            return;
+        }
         ?>
         <style>
         .column-wcotl_refund_window { width: 110px; text-align: center !important; }

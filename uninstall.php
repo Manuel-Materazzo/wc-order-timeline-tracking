@@ -21,9 +21,9 @@ if ( ! empty( $delete_data ) ) {
     $table_meta     = $wpdb->prefix . 'order_timeline_meta';
     $table_presets  = $wpdb->prefix . 'order_timeline_presets';
 
-    $wpdb->query( "DROP TABLE IF EXISTS {$table_timeline}" );
-    $wpdb->query( "DROP TABLE IF EXISTS {$table_meta}" );
-    $wpdb->query( "DROP TABLE IF EXISTS {$table_presets}" );
+    $wpdb->query( "DROP TABLE IF EXISTS $table_timeline" );
+    $wpdb->query( "DROP TABLE IF EXISTS $table_meta" );
+    $wpdb->query( "DROP TABLE IF EXISTS $table_presets" );
 
     // Delete plugin options
     delete_option( 'wcotl_db_version' );

@@ -8,11 +8,13 @@
  *   - Sync interval (hours)
  *   - Inactivity threshold (days before stopping auto-tracking)
  */
-if ( ! defined( 'ABSPATH' ) ) exit;
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 class WCOTL_Settings {
 
-    public static function init() {
+    public static function init(): void {
         add_action( 'admin_menu',    [ __CLASS__, 'register_menu' ] );
         add_action( 'admin_init',    [ __CLASS__, 'register_settings' ] );
         add_action( 'admin_post_wcotl_save_settings', [ __CLASS__, 'save_settings' ] );
@@ -34,7 +36,7 @@ class WCOTL_Settings {
      * Menu registration
      * ------------------------------------------------------------------ */
 
-    public static function register_menu() {
+    public static function register_menu(): void {
         add_submenu_page(
             'wcotl-tracking',
             'Tracking Settings',
@@ -49,7 +51,7 @@ class WCOTL_Settings {
      * Settings registration (used only for nonce / sanitise wiring)
      * ------------------------------------------------------------------ */
 
-    public static function register_settings() {
+    public static function register_settings(): void {
         register_setting( 'wcotl_settings_group', 'wcotl_17track_api_key',           'sanitize_text_field' );
         register_setting( 'wcotl_settings_group', 'wcotl_packlink_api_key',           'sanitize_text_field' );
         register_setting( 'wcotl_settings_group', 'wcotl_sync_interval',             'absint' );
@@ -64,7 +66,7 @@ class WCOTL_Settings {
      * Save handler (custom form POST to avoid WP settings-api redirect quirks)
      * ------------------------------------------------------------------ */
 
-    public static function save_settings() {
+    public static function save_settings(): void {
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
             wp_die( 'Not allowed.' );
         }
@@ -111,7 +113,7 @@ class WCOTL_Settings {
      * AJAX: detect carriers for a real tracking number
      * ------------------------------------------------------------------ */
 
-    public static function ajax_detect_carriers() {
+    public static function ajax_detect_carriers(): void {
         check_ajax_referer( 'wcotl_admin_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
             wp_send_json_error( 'Not allowed.' );
@@ -132,7 +134,7 @@ class WCOTL_Settings {
      * AJAX: save real tracking number + carrier for a plugin tracking code
      * ------------------------------------------------------------------ */
 
-    public static function ajax_save_auto_tracking() {
+    public static function ajax_save_auto_tracking(): void {
         check_ajax_referer( 'wcotl_admin_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
             wp_send_json_error( 'Not allowed.' );
@@ -157,8 +159,8 @@ class WCOTL_Settings {
         $meta_table = $wpdb->prefix . 'order_timeline_meta';
         // A tracking code is valid if it has at least one step OR at least one meta row.
         // Newly created codes (no steps yet) only exist in the meta table.
-        $exists_in_steps = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
-        $exists_in_meta  = $exists_in_steps ? null : $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$meta_table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
+        $exists_in_steps = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM $table WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
+        $exists_in_meta  = $exists_in_steps ? null : $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM $meta_table WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
         if ( ! $exists_in_steps && ! $exists_in_meta ) {
             wp_send_json_error( 'Unknown tracking code.' );
         }
@@ -192,20 +194,22 @@ class WCOTL_Settings {
      * AJAX: force sync now for a single code
      * ------------------------------------------------------------------ */
 
-    public static function ajax_sync_now() {
+    public static function ajax_sync_now(): void {
         check_ajax_referer( 'wcotl_admin_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
             wp_send_json_error( 'Not allowed.' );
         }
 
         $tracking_code = sanitize_text_field( wp_unslash( $_POST['tracking_code'] ?? '' ) );
-        if ( ! $tracking_code ) wp_send_json_error( 'Missing tracking_code.' );
+        if ( ! $tracking_code ) {
+            wp_send_json_error( 'Missing tracking_code.' );
+        }
 
         global $wpdb;
         $table      = $wpdb->prefix . 'order_timeline';
         $meta_table = $wpdb->prefix . 'order_timeline_meta';
-        $exists_in_steps = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
-        $exists_in_meta  = $exists_in_steps ? null : $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$meta_table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
+        $exists_in_steps = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM $table WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
+        $exists_in_meta  = $exists_in_steps ? null : $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM $meta_table WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
         if ( ! $exists_in_steps && ! $exists_in_meta ) {
             wp_send_json_error( 'Unknown tracking code.' );
         }
@@ -228,20 +232,22 @@ class WCOTL_Settings {
      * AJAX: resume stopped sync
      * ------------------------------------------------------------------ */
 
-    public static function ajax_resume_sync() {
+    public static function ajax_resume_sync(): void {
         check_ajax_referer( 'wcotl_admin_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
             wp_send_json_error( 'Not allowed.' );
         }
 
         $tracking_code = sanitize_text_field( wp_unslash( $_POST['tracking_code'] ?? '' ) );
-        if ( ! $tracking_code ) wp_send_json_error( 'Missing tracking_code.' );
+        if ( ! $tracking_code ) {
+            wp_send_json_error( 'Missing tracking_code.' );
+        }
 
         global $wpdb;
         $table      = $wpdb->prefix . 'order_timeline';
         $meta_table = $wpdb->prefix . 'order_timeline_meta';
-        $exists_in_steps = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
-        $exists_in_meta  = $exists_in_steps ? null : $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$meta_table} WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
+        $exists_in_steps = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM $table WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
+        $exists_in_meta  = $exists_in_steps ? null : $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM $meta_table WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
         if ( ! $exists_in_steps && ! $exists_in_meta ) {
             wp_send_json_error( 'Unknown tracking code.' );
         }
@@ -259,7 +265,7 @@ class WCOTL_Settings {
      * Settings page UI
      * ------------------------------------------------------------------ */
 
-    public static function page() {
+    public static function page(): void {
         $api_key                   = get_option( 'wcotl_17track_api_key', '' );
         $packlink_api_key          = get_option( 'wcotl_packlink_api_key', '' );
         $sync_interval             = max( 1, (int) get_option( 'wcotl_sync_interval', 1 ) );
@@ -493,7 +499,7 @@ class WCOTL_Settings {
      * AJAX: update delete data preference on uninstall
      * ------------------------------------------------------------------ */
 
-    public static function ajax_set_uninstall_data_preference() {
+    public static function ajax_set_uninstall_data_preference(): void {
         check_ajax_referer( 'wcotl_uninstall_nonce', 'nonce' );
         if ( ! current_user_can( 'delete_plugins' ) && ! current_user_can( 'manage_woocommerce' ) ) {
             wp_send_json_error( 'Not allowed.' );
@@ -509,7 +515,7 @@ class WCOTL_Settings {
      * Modal on plugins.php when user clicks "Delete"
      * ------------------------------------------------------------------ */
 
-    public static function render_plugins_uninstall_modal() {
+    public static function render_plugins_uninstall_modal(): void {
         global $pagenow;
         if ( $pagenow !== 'plugins.php' ) {
             return;
