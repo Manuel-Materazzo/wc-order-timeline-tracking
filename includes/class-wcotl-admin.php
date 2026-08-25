@@ -1164,20 +1164,20 @@ class WCOTL_Admin {
 
 
                     <div class="wcotl-form-row">
-                        <label>Date and Time <span style="color:#d63638">*</span></label>
-                        <input type="datetime-local" name="step_date" value="<?php echo esc_attr( wp_date('Y-m-d\TH:i') ); ?>" required>
+                        <label for="step_date">Date and Time <span style="color:#d63638">*</span></label>
+                        <input type="datetime-local" id="step_date" name="step_date" value="<?php echo esc_attr( wp_date('Y-m-d\TH:i') ); ?>" required>
                     </div>
                     <div class="wcotl-form-row">
-                        <label>Step description <span style="color:#d63638">*</span></label>
-                        <input type="text" name="step_label" placeholder="e.g. Goods loaded in Milan" required>
+                        <label for="step_label">Step description <span style="color:#d63638">*</span></label>
+                        <input type="text" id="step_label" name="step_label" placeholder="e.g. Goods loaded in Milan" required>
                     </div>
                     <div class="wcotl-form-row">
-                        <label>Additional note (optional)</label>
-                        <textarea name="step_note" placeholder="Extra details, customer info..."></textarea>
+                        <label for="step_note">Additional note (optional)</label>
+                        <textarea id="step_note" name="step_note" placeholder="Extra details, customer info..."></textarea>
                     </div>
                     <div class="wcotl-form-row">
-                        <label>Icon</label>
-                        <select name="step_icon">
+                        <label for="step_icon">Icon</label>
+                        <select id="step_icon" name="step_icon">
                             <?php foreach ( array_keys($icons) as $k ) : ?>
                                 <option value="<?php echo esc_attr($k); ?>"><?php echo esc_html(ucfirst(str_replace('_',' ',$k))); ?></option>
                             <?php endforeach; ?>
@@ -1241,8 +1241,8 @@ class WCOTL_Admin {
                         <input type="hidden" name="order_id" value="<?php echo esc_attr( $order_id ); ?>">
                     <?php endif; ?>
                     <div class="wcotl-form-row">
-                        <label>Tracking code</label>
-                        <input type="text" name="tracking_code" value="<?php echo esc_attr($suggested); ?>"
+                        <label for="tracking_code">Tracking code</label>
+                        <input type="text" id="tracking_code" name="tracking_code" value="<?php echo esc_attr($suggested); ?>"
                                placeholder="e.g. TRK-20240518-001" required style="font-family:monospace;">
                     </div>
                     <?php if ( $order_id ) : ?>
