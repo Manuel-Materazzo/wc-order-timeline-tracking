@@ -101,10 +101,24 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
         }
 
         // Rejected
+        $rejected_item = $body['data']['rejected'][0] ?? [];
+        $rejected_code = $rejected_item['error']['code'] ?? null;
+        $rejected_msg  = $rejected_item['error']['message'] ?? '';
+
+        // 17TRACK error code -18019901: "The tracking number has been registered, don't need to repeat registration."
+        // Treat as success so subsequent tracking info calls succeed.
+        if ( $rejected_code === -18019901 || stripos( $rejected_msg, 'don\'t need to repeat registration' ) !== false || stripos( $rejected_msg, 'has been registered' ) !== false ) {
+            return [
+                'success'      => true,
+                'carrier_code' => isset( $rejected_item['carrier'] ) ? (int) $rejected_item['carrier'] : ( $carrier_code ?: null ),
+                'error'        => null,
+            ];
+        }
+
         return [
             'success'      => false,
             'carrier_code' => null,
-            'error'        => $body['data']['rejected'][0]['error']['message'] ?? 'Registration rejected by 17TRACK.',
+            'error'        => $rejected_msg ?: 'Registration rejected by 17TRACK.',
         ];
     }
 
