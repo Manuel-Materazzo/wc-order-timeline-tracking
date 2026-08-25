@@ -58,8 +58,8 @@ class WCOTL_Auto_Sync {
     public static function init() {
         add_action( self::CRON_HOOK, [ __CLASS__, 'run_sync' ] );
         add_action( 'update_option_wcotl_sync_interval', [ __CLASS__, 'reschedule' ], 10, 2 );
-        add_action( 'plugins_loaded', [ __CLASS__, 'ensure_scheduled' ] );
         add_filter( 'cron_schedules', [ __CLASS__, 'add_cron_schedules' ] );
+        self::ensure_scheduled();
     }
 
     /**
@@ -175,7 +175,7 @@ class WCOTL_Auto_Sync {
                  LIMIT 500",
                 self::META_NEXT_SYNC_AT,
                 self::META_REAL_NUMBER,
-                current_time( 'mysql' ),
+                current_time( 'mysql', true ),
                 self::META_SYNC_STOPPED
             )
         );

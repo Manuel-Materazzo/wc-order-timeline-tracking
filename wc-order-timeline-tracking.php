@@ -50,7 +50,10 @@ class WCOTL_Plugin {
     }
 }
 
-register_activation_hook( __FILE__, array( 'WCOTL_DB', 'activate' ) );
+register_activation_hook( __FILE__, function() {
+    WCOTL_DB::activate();
+    WCOTL_Auto_Sync::ensure_scheduled();
+} );
 register_deactivation_hook( __FILE__, array( 'WCOTL_Auto_Sync', 'deactivate' ) );
 
 add_action( 'before_woocommerce_init', function () {
