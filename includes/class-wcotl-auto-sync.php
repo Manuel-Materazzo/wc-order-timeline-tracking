@@ -146,9 +146,9 @@ class WCOTL_Auto_Sync {
 
         /*
          * Pull codes that are due for a sync, oldest-due first.
-         * "Due" means next_sync_at IS NULL (never synced) or <= NOW().
+         * "Due" means next_sync_at IS NULL (never synced), empty, or <= NOW (UTC).
          * We use a LEFT JOIN so that codes with no next_sync_at row at all
-         * are also included (NULL IS NULL => due).
+         * are also included.
          * Sync-stopped codes are excluded via a NOT EXISTS sub-select.
          *
          * No LIMIT – we process as many as the time budget allows, and
@@ -164,7 +164,7 @@ class WCOTL_Auto_Sync {
                        AND ns.meta_key = %s
                  WHERE m.meta_key = %s
                    AND m.meta_value != ''
-                   AND ( ns.meta_value IS NULL OR ns.meta_value <= %s )
+                   AND ( ns.meta_value IS NULL OR ns.meta_value = '' OR ns.meta_value <= %s )
                    AND NOT EXISTS (
                        SELECT 1 FROM {$meta_table} st
                        WHERE st.tracking_code = m.tracking_code
@@ -175,7 +175,7 @@ class WCOTL_Auto_Sync {
                  LIMIT 500",
                 self::META_NEXT_SYNC_AT,
                 self::META_REAL_NUMBER,
-                current_time( 'mysql', true ),
+                gmdate( 'Y-m-d H:i:s' ),
                 self::META_SYNC_STOPPED
             )
         );
