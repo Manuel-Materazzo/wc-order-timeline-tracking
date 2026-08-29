@@ -40,12 +40,20 @@ class WCOTL_Packlink_Provider extends WCOTL_Tracking_Provider {
      * Packlink shipment status string => normalised status mapping.
      */
     const STATUS_MAP = [
-        'pending'          => 'in_transit',
-        'processing'       => 'in_transit',
-        'readyForShipping' => 'in_transit',
-        'inTransit'        => 'in_transit',
-        'delivered'        => 'delivered',
-        'cancelled'        => 'expired',
+        'pending'              => 'in_transit',
+        'processing'           => 'in_transit',
+        'ready_for_shipping'   => 'in_transit',
+        'readyforshipping'     => 'in_transit',
+        'in_transit'           => 'in_transit',
+        'intransit'            => 'in_transit',
+        'out_for_delivery'     => 'in_transit',
+        'outfordelivery'       => 'in_transit',
+        'delivered'            => 'delivered',
+        'completed'            => 'delivered',
+        'delivered_to_recipient' => 'delivered',
+        'cancelled'            => 'expired',
+        'canceled'             => 'expired',
+        'expired'              => 'expired',
     ];
 
     /** @var string */
@@ -145,8 +153,19 @@ class WCOTL_Packlink_Provider extends WCOTL_Tracking_Provider {
         }
 
         $shipment_body   = $shipment_resp['body'] ?? [];
-        $packlink_status = $shipment_body['status'] ?? $shipment_body['state'] ?? '';
-        $status          = self::STATUS_MAP[ $packlink_status ] ?? 'in_transit';
+        $raw_status      = (string) ( $shipment_body['status'] ?? $shipment_body['state'] ?? '' );
+        $normalized_key  = strtolower( trim( preg_replace( '/[_\-\s]+/', '', $raw_status ) ) );
+
+        $status = self::STATUS_MAP[ $normalized_key ] ?? ( self::STATUS_MAP[ strtolower( trim( $raw_status ) ) ] ?? null );
+        if ( ! $status ) {
+            if ( str_contains( $normalized_key, 'delivered' ) || str_contains( $normalized_key, 'completed' ) || str_contains( $normalized_key, 'entregado' ) || str_contains( $normalized_key, 'livre' ) || str_contains( $normalized_key, 'consegnato' ) ) {
+                $status = 'delivered';
+            } elseif ( str_contains( $normalized_key, 'cancel' ) || str_contains( $normalized_key, 'expired' ) ) {
+                $status = 'expired';
+            } else {
+                $status = 'in_transit';
+            }
+        }
 
         // 2. Fetch tracking events.
         $raw_events = $this->fetch_raw_events( $clean_ref );
@@ -190,6 +209,24 @@ class WCOTL_Packlink_Provider extends WCOTL_Tracking_Provider {
         }
 
         usort( $events, fn( $a, $b ) => strcmp( $a['date'], $b['date'] ) );
+
+        // Fallback: If top-level status is not yet 'delivered', check if any tracking event indicates delivery.
+        if ( $status !== 'delivered' && ! empty( $events ) ) {
+            foreach ( $events as $event_item ) {
+                $ev_label = strtolower( $event_item['label'] ?? '' );
+                if (
+                    str_contains( $ev_label, 'delivered' ) ||
+                    str_contains( $ev_label, 'livré' ) ||
+                    str_contains( $ev_label, 'entregado' ) ||
+                    str_contains( $ev_label, 'consegnato' ) ||
+                    str_contains( $ev_label, 'zugestellt' ) ||
+                    str_contains( $ev_label, 'bezorgd' )
+                ) {
+                    $status = 'delivered';
+                    break;
+                }
+            }
+        }
 
         return [
             'success' => true,
