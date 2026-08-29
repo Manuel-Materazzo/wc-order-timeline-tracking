@@ -231,11 +231,11 @@ class WCOTL_Admin {
 
                         $last_update_ts = ! empty( $row->last_update ) ? strtotime( $row->last_update ) : false;
                         if ( $last_update_ts !== false ) {
-                            $last_update_str = wp_date( $date_format . ' ' . $time_format, $last_update_ts );
+                            $last_update_str = wp_date( $date_format . ' ' . $time_format, $last_update_ts, new DateTimeZone( 'UTC' ) );
                         } else {
                             try {
-                                $dt = new DateTime( $row->last_update );
-                                $last_update_str = wp_date( $date_format . ' ' . $time_format, $dt->getTimestamp() );
+                                $dt              = new DateTime( $row->last_update );
+                                $last_update_str = wp_date( $date_format . ' ' . $time_format, $dt->getTimestamp(), new DateTimeZone( 'UTC' ) );
                             } catch ( Exception $e ) {
                                 $last_update_str = esc_html( $row->last_update ?? '—' );
                             }
@@ -970,12 +970,12 @@ class WCOTL_Admin {
                     <?php foreach ( $steps as $s ) :
                         $step_ts = ! empty( $s->step_date ) ? strtotime( $s->step_date ) : false;
                         if ( $step_ts !== false ) {
-                            $step_date_str  = wp_date( $date_format . ' ' . $time_format, $step_ts );
-                            $input_date_val = wp_date( 'Y-m-d\TH:i', $step_ts );
+                            $step_date_str  = wp_date( $date_format . ' ' . $time_format, $step_ts, new DateTimeZone( 'UTC' ) );
+                            $input_date_val = wp_date( 'Y-m-d\TH:i', $step_ts, new DateTimeZone( 'UTC' ) );
                         } else {
                             try {
                                 $dt             = new DateTime( $s->step_date );
-                                $step_date_str  = wp_date( $date_format . ' ' . $time_format, $dt->getTimestamp() );
+                                $step_date_str  = wp_date( $date_format . ' ' . $time_format, $dt->getTimestamp(), new DateTimeZone( 'UTC' ) );
                                 $input_date_val = $dt->format( 'Y-m-d\TH:i' );
                             } catch ( Exception $e ) {
                                 $step_date_str  = esc_html( $s->step_date ?? '' );

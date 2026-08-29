@@ -140,7 +140,7 @@ class WCOTL_Refund_Column {
         $deadline    = '';
         try {
             $deadline_dt = ( new DateTime( $delivered_at ) )->modify( '+14 days' );
-            $deadline    = wp_date( $date_format, $deadline_dt->getTimestamp() );
+            $deadline    = wp_date( $date_format, $deadline_dt->getTimestamp(), new DateTimeZone( 'UTC' ) );
         } catch ( Exception $e ) {
             $deadline = esc_html( $delivered_at );
         }

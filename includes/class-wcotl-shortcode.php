@@ -305,7 +305,7 @@ class WCOTL_Shortcode {
 
                 <?php if ( ! empty( $delivered_at ) ) :
                     $dd_ts = strtotime( $delivered_at );
-                    $dd_label = $dd_ts ? wp_date( $site_date_format, $dd_ts ) : esc_html( $delivered_at );
+                    $dd_label = $dd_ts ? wp_date( $site_date_format, $dd_ts, new DateTimeZone( 'UTC' ) ) : esc_html( $delivered_at );
                 ?>
                 <div class="wcotl-delivered">
                     <div class="wcotl-delivered__icon">
@@ -318,7 +318,7 @@ class WCOTL_Shortcode {
                 </div>
                 <?php elseif ( ! empty( $estimated_delivery ) ) :
                     $ed_ts = strtotime( $estimated_delivery );
-                    $ed_label = $ed_ts ? wp_date( $site_date_format, $ed_ts ) : esc_html( $estimated_delivery );
+                    $ed_label = $ed_ts ? wp_date( $site_date_format, $ed_ts, new DateTimeZone( 'UTC' ) ) : esc_html( $estimated_delivery );
                 ?>
                 <div class="wcotl-delivery">
                     <div class="wcotl-delivery__icon">
@@ -339,13 +339,13 @@ class WCOTL_Shortcode {
 
                         $step_ts = strtotime( $step->step_date );
                         if ( $step_ts !== false ) {
-                            $date_fmt = wp_date( $site_date_format, $step_ts );
-                            $time_fmt = wp_date( $site_time_format, $step_ts );
+                            $date_fmt = wp_date( $site_date_format, $step_ts, new DateTimeZone( 'UTC' ) );
+                            $time_fmt = wp_date( $site_time_format, $step_ts, new DateTimeZone( 'UTC' ) );
                         } else {
                             try {
                                 $dt       = new DateTime( $step->step_date );
-                                $date_fmt = wp_date( $site_date_format, $dt->getTimestamp() );
-                                $time_fmt = wp_date( $site_time_format, $dt->getTimestamp() );
+                                $date_fmt = wp_date( $site_date_format, $dt->getTimestamp(), new DateTimeZone( 'UTC' ) );
+                                $time_fmt = wp_date( $site_time_format, $dt->getTimestamp(), new DateTimeZone( 'UTC' ) );
                             } catch ( Exception $e ) {
                                 $date_fmt = esc_html( $step->step_date );
                                 $time_fmt = '';
