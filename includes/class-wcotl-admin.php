@@ -12,6 +12,39 @@ class WCOTL_Admin {
         add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
         add_action( 'admin_head', array( __CLASS__, 'admin_styles' ) );
         add_action( 'admin_head', array( __CLASS__, 'admin_nonce_script' ) );
+        add_filter( 'admin_title', array( __CLASS__, 'admin_page_title' ), 10, 2 );
+    }
+
+    /**
+     * Customize browser <title> on the edit/view tracking code page.
+     *
+     * @param string $admin_title Current admin title.
+     * @param string $title Page title without site name.
+     * @return string
+     */
+    public static function admin_page_title( string $admin_title, string $title ): string {
+        if ( isset( $_GET['page'] ) && $_GET['page'] === 'wcotl-tracking' && ! empty( $_GET['view'] ) ) {
+            $code = sanitize_text_field( wp_unslash( $_GET['view'] ) );
+            $order_id = absint( WCOTL_DB::get_meta( $code, 'order_id' ) );
+
+            if ( ! $order_id ) {
+                global $wpdb;
+                $table = $wpdb->prefix . 'order_timeline';
+                $order_id = (int) $wpdb->get_var(
+                    $wpdb->prepare( "SELECT order_id FROM {$table} WHERE tracking_code = %s AND order_id > 0 LIMIT 1", $code )
+                );
+            }
+
+            if ( $order_id ) {
+                $custom_title = sprintf( __( 'Tracking #%d', 'wc-order-timeline' ), $order_id );
+            } else {
+                $custom_title = sprintf( __( 'Tracking %s', 'wc-order-timeline' ), $code );
+            }
+
+            return $custom_title . ' &lsaquo; ' . get_bloginfo( 'name' );
+        }
+
+        return $admin_title;
     }
 
     public static function register_menu(): void {
