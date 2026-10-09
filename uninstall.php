@@ -28,6 +28,10 @@ if ( ! empty( $delete_data ) ) {
     // Delete plugin options
     delete_option( 'wcotl_db_version' );
     delete_option( 'wcotl_17track_api_key' );
+    delete_option( 'wcotl_packlink_api_key' );
+    delete_option( 'wcotl_fedex_client_id' );
+    delete_option( 'wcotl_fedex_client_secret' );
+    delete_option( 'wcotl_fedex_environment' );
     delete_option( 'wcotl_sync_interval' );
     delete_option( 'wcotl_inactivity_days' );
     delete_option( 'wcotl_delete_data_on_uninstall' );

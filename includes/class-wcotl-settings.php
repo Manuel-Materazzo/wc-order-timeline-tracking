@@ -53,7 +53,10 @@ class WCOTL_Settings {
 
     public static function register_settings(): void {
         register_setting( 'wcotl_settings_group', 'wcotl_17track_api_key',           'sanitize_text_field' );
-        register_setting( 'wcotl_settings_group', 'wcotl_packlink_api_key',           'sanitize_text_field' );
+        register_setting( 'wcotl_settings_group', 'wcotl_packlink_api_key',          'sanitize_text_field' );
+        register_setting( 'wcotl_settings_group', 'wcotl_fedex_client_id',           'sanitize_text_field' );
+        register_setting( 'wcotl_settings_group', 'wcotl_fedex_client_secret',       'sanitize_text_field' );
+        register_setting( 'wcotl_settings_group', 'wcotl_fedex_environment',         'sanitize_key' );
         register_setting( 'wcotl_settings_group', 'wcotl_sync_interval',             'absint' );
         register_setting( 'wcotl_settings_group', 'wcotl_inactivity_days',           'absint' );
         register_setting( 'wcotl_settings_group', 'wcotl_delete_data_on_uninstall',  'absint' );
@@ -79,6 +82,19 @@ class WCOTL_Settings {
         if ( isset( $_POST['wcotl_packlink_api_key'] ) ) {
             $packlink_key = sanitize_text_field( wp_unslash( $_POST['wcotl_packlink_api_key'] ) );
             update_option( 'wcotl_packlink_api_key', $packlink_key );
+        }
+        if ( isset( $_POST['wcotl_fedex_client_id'] ) ) {
+            $fedex_client_id = sanitize_text_field( wp_unslash( $_POST['wcotl_fedex_client_id'] ) );
+            update_option( 'wcotl_fedex_client_id', $fedex_client_id );
+        }
+        if ( isset( $_POST['wcotl_fedex_client_secret'] ) ) {
+            $fedex_client_secret = sanitize_text_field( wp_unslash( $_POST['wcotl_fedex_client_secret'] ) );
+            update_option( 'wcotl_fedex_client_secret', $fedex_client_secret );
+        }
+        if ( isset( $_POST['wcotl_fedex_environment'] ) ) {
+            $fedex_environment = sanitize_key( wp_unslash( $_POST['wcotl_fedex_environment'] ) );
+            $fedex_environment = ( $fedex_environment === 'sandbox' ) ? 'sandbox' : 'production';
+            update_option( 'wcotl_fedex_environment', $fedex_environment );
         }
         if ( isset( $_POST['wcotl_sync_interval'] ) ) {
             $interval = max( 1, absint( $_POST['wcotl_sync_interval'] ) );
@@ -146,7 +162,7 @@ class WCOTL_Settings {
         $provider_slug = sanitize_key( $_POST['provider'] ?? '17track' );
 
         // Validate provider slug.
-        if ( ! in_array( $provider_slug, [ '17track', 'packlink' ], true ) ) {
+        if ( ! in_array( $provider_slug, [ '17track', 'packlink', 'fedex' ], true ) ) {
             $provider_slug = '17track';
         }
 
@@ -174,8 +190,8 @@ class WCOTL_Settings {
 
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_REAL_NUMBER,  $real_number );
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_PROVIDER,     $provider_slug );
-            // Carrier code is only meaningful for 17TRACK; clear it for Packlink.
-            if ( $provider_slug === 'packlink' ) {
+            // Carrier code is only meaningful for 17TRACK; clear it for Packlink and FedEx.
+            if ( $provider_slug === 'packlink' || $provider_slug === 'fedex' ) {
                 WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_CARRIER_CODE, '' );
             } else {
                 WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_CARRIER_CODE, $carrier_code ?: '' );
@@ -276,6 +292,10 @@ class WCOTL_Settings {
     public static function page(): void {
         $api_key                   = get_option( 'wcotl_17track_api_key', '' );
         $packlink_api_key          = get_option( 'wcotl_packlink_api_key', '' );
+        $fedex_client_id           = get_option( 'wcotl_fedex_client_id', '' );
+        $fedex_client_secret       = get_option( 'wcotl_fedex_client_secret', '' );
+        $fedex_environment         = get_option( 'wcotl_fedex_environment', 'production' );
+        $fedex_configured          = ( ! empty( $fedex_client_id ) && ! empty( $fedex_client_secret ) );
         $sync_interval             = max( 1, (int) get_option( 'wcotl_sync_interval', 1 ) );
         $inactivity_days           = max( 1, (int) get_option( 'wcotl_inactivity_days', 45 ) );
         $delete_data_on_uninstall = (int) get_option( 'wcotl_delete_data_on_uninstall', 0 );
@@ -419,6 +439,66 @@ class WCOTL_Settings {
                 <?php endif; ?>
             </div>
 
+            <!-- FedEx REST API -->
+            <div class="card" style="max-width:620px;margin-top:20px;">
+                <h2><span class="dashicons dashicons-airplane"></span> FedEx API</h2>
+                <p style="font-size:13px;color:#646970;margin-bottom:16px;">
+                    Enter your FedEx REST API credentials to enable auto-tracking for FedEx shipments.
+                    Create an organization project and obtain your API Key (Client ID) and Secret Key (Client Secret) at the
+                    <a href="https://developer.fedex.com" target="_blank">FedEx Developer Portal</a>.
+                </p>
+
+                <form method="POST" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
+                    <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
+                    <input type="hidden" name="action" value="wcotl_save_settings">
+
+                    <div class="wcotl-form-row">
+                        <label>
+                            FedEx API Key / Client ID
+                            <?php if ( $fedex_configured ) : ?>
+                                <span style="color:#008a20;font-size:11px;margin-left:6px;">✓ Configured</span>
+                            <?php endif; ?>
+                        </label>
+                        <input type="text" name="wcotl_fedex_client_id"
+                               value="<?php echo esc_attr( $fedex_client_id ); ?>"
+                               placeholder="e.g. l7xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                               style="font-family:monospace;width:100%;">
+                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
+                            Leave empty to disable FedEx auto-tracking.
+                        </small>
+                    </div>
+
+                    <div class="wcotl-form-row">
+                        <label>FedEx Secret Key / Client Secret</label>
+                        <div style="display:flex;gap:6px;">
+                            <input type="password" id="wcotl_fedex_secret_field" name="wcotl_fedex_client_secret"
+                                   value="<?php echo esc_attr( $fedex_client_secret ); ?>"
+                                   placeholder="Paste your FedEx Secret Key here"
+                                   style="font-family:monospace;flex:1;">
+                            <button type="button" class="button" onclick="var f = document.getElementById('wcotl_fedex_secret_field'); f.type = f.type === 'password' ? 'text' : 'password'; this.textContent = f.type === 'password' ? 'Show' : 'Hide';">Show</button>
+                        </div>
+                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
+                            Used to obtain OAuth 2.0 Bearer tokens for the FedEx Track API.
+                        </small>
+                    </div>
+
+                    <div class="wcotl-form-row">
+                        <label>Environment</label>
+                        <select name="wcotl_fedex_environment" style="width:240px;">
+                            <option value="production" <?php selected( $fedex_environment, 'production' ); ?>>Production (apis.fedex.com)</option>
+                            <option value="sandbox" <?php selected( $fedex_environment, 'sandbox' ); ?>>Sandbox (apis-sandbox.fedex.com)</option>
+                        </select>
+                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
+                            Select Sandbox for testing credentials, Production for live tracking.
+                        </small>
+                    </div>
+
+                    <button type="submit" class="button button-primary" style="margin-top:8px;">
+                        Save FedEx Settings
+                    </button>
+                </form>
+            </div>
+
             <!-- Cloudflare Turnstile & Anti-Scraping Protection -->
             <?php
             $turnstile_site_key   = get_option( 'wcotl_turnstile_site_key', '' );
@@ -491,10 +571,10 @@ class WCOTL_Settings {
             <div class="card" style="max-width:620px;background:#f0f7ff;border-color:#b8d4f8;">
                 <h2 style="color:#1a5fa8;">ℹ How auto-tracking works</h2>
                 <ul style="font-size:13px;line-height:1.9;color:#2d4a6e;padding-left:18px;">
-                    <li>For each plugin tracking code, you can attach a <strong>real carrier tracking number</strong> (e.g. <code>RR123456789CN</code>).</li>
-                    <li>The plugin polls 17TRACK every <strong><?php echo $sync_interval; ?> hour(s)</strong> and automatically imports new updates as timeline steps.</li>
+                    <li>For each plugin tracking code, you can attach a shipment reference from <strong>17TRACK</strong>, <strong>Packlink PRO</strong>, or <strong>FedEx</strong>.</li>
+                    <li>The plugin polls active tracking providers every <strong><?php echo $sync_interval; ?> hour(s)</strong> and automatically imports new updates as timeline steps.</li>
                     <li>Existing manual steps <strong>are never modified or deleted</strong>: they coexist alongside automatic ones.</li>
-                    <li>When 17TRACK reports the <strong>Delivered</strong> status, the actual delivery date is set automatically.</li>
+                    <li>When the carrier reports the <strong>Delivered</strong> status, the actual delivery date is set automatically.</li>
                     <li>Polling automatically stops for shipments: Delivered, Expired, or <strong>inactive for <?php echo $inactivity_days; ?> days</strong>.</li>
                     <li>In case of prolonged inactivity, an email notification is sent to the site admin.</li>
                 </ul>

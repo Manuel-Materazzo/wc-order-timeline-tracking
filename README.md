@@ -1,6 +1,6 @@
 # WC Order Timeline Tracking
 
-**WC Order Timeline Tracking** is a feature-packed WooCommerce extension that provides personalized, step-by-step order tracking timeline management. It features custom timeline milestones, status presets, administrative timeline managers, and automatic real-time sync with **17TRACK API** and **Packlink PRO API**.
+**WC Order Timeline Tracking** is a feature-packed WooCommerce extension that provides personalized, step-by-step order tracking timeline management. It features custom timeline milestones, status presets, administrative timeline managers, and automatic real-time sync with **17TRACK API**, **Packlink PRO API**, and **FedEx REST APIs**.
 
 ---
 
@@ -10,6 +10,7 @@
 * **Status & Preset Management**: Define and save timeline step templates/presets for fast application to orders.
 * **Automated 17TRACK Sync**: Auto-fetch live shipping carrier updates using the 17TRACK API background cron job.
 * **Packlink PRO Sync**: Auto-fetch tracking events directly from your Packlink PRO shipment references (requires the Packlink PRO Shipping plugin).
+* **Automated FedEx Sync**: Auto-fetch tracking events directly using FedEx REST APIs via OAuth 2.0 (supports Production and Sandbox environments).
 * **Carrier Auto-Detection**: Automatically detect courier services based on the tracking number (17TRACK provider).
 * **Frontend Tracking Shortcode**: Display a sleek, modern, mobile-responsive tracking timeline to customers using `[wc_order_timeline_tracking]`.
 * **Refund Column Integration**: Adds timeline visibility directly inside WooCommerce admin order lists.
@@ -23,6 +24,7 @@
 * **PHP**: 8.0 or higher
 * **17TRACK Account & API Key** *(Optional, for 17TRACK automated carrier tracking)*
 * **Packlink PRO Account, API Key & the [Packlink PRO Shipping](https://wordpress.org/plugins/packlink-pro-shipping/) plugin** *(Optional, for Packlink automated tracking)*
+* **FedEx Developer Account & Project API Credentials** *(Optional, for FedEx REST automated tracking)*
 
 ---
 
@@ -75,11 +77,30 @@ Packlink PRO tracking is available **only when the [Packlink PRO Shipping for Wo
 5. On each tracking code's detail page, select **Packlink PRO** as the provider and enter the Packlink **Shipment Reference** as the tracking reference.
 6. The same background cron job will auto-fetch updates from Packlink and add them as timeline steps.
 
-### Key differences vs. 17TRACK
+---
 
-| Feature | 17TRACK | Packlink PRO |
-|---|---|---|
-| Tracking identifier | Carrier tracking number | Packlink Shipment Reference |
-| Carrier detection | ✓ Auto-detect | ✗ Not applicable |
-| Plugin requirement | None | Packlink PRO Shipping plugin |
-| Per-code setup | Real tracking # + optional carrier code | Shipment Reference only |
+## ✈️ FedEx Integration & Auto-Sync
+
+FedEx automated tracking connects directly to the [FedEx Track API](https://developer.fedex.com/wirc/browser/en-it/catalog/track/docs) via [FedEx OAuth 2.0 Authorization](https://developer.fedex.com/wirc/browser/en-it/catalog/authorization/docs).
+
+1. Create a project in the [FedEx Developer Portal](https://developer.fedex.com/) to obtain your **API Key (Client ID)** and **Secret Key (Client Secret)**.
+2. Navigate to **Timeline Tracking > ⚙ Settings**.
+3. In the **FedEx API** section:
+   - Enter your **FedEx API Key / Client ID**.
+   - Enter your **FedEx Secret Key / Client Secret**.
+   - Select the target environment: **Production** (`apis.fedex.com`) or **Sandbox** (`apis-sandbox.fedex.com`).
+4. Save settings.
+5. On any tracking code detail screen, select **FedEx** as the provider and enter the real FedEx tracking number (e.g. `123456789012`).
+6. The background cron job handles OAuth token generation, automatic token expiration caching, detailed scan retrieval, and timeline step creation.
+
+### Provider Comparison
+
+| Feature | 17TRACK | Packlink PRO | FedEx |
+|---|---|---|---|
+| Tracking identifier | Carrier tracking number | Packlink Shipment Reference | FedEx Tracking Number |
+| Authentication | Static API Token (`17token` header) | API Key header | OAuth 2.0 Bearer Token (Client Credentials) |
+| Environments | Production | Production | Production & Sandbox |
+| Carrier selection | Auto-detect or carrier code | N/A | Dedicated FedEx carrier |
+| Plugin requirement | None | Packlink PRO Shipping plugin | None |
+| Per-code setup | Real tracking # + optional carrier code | Shipment Reference only | Real FedEx tracking # |
+

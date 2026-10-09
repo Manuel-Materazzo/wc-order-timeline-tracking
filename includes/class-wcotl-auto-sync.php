@@ -46,7 +46,7 @@ class WCOTL_Auto_Sync {
 
     /**
      * Meta key: provider slug assigned to this tracking code.
-     * '17track' (default/empty) or 'packlink'.
+     * '17track' (default/empty), 'packlink', or 'fedex'.
      */
     const META_PROVIDER = 'auto_tracking_provider';
 
@@ -505,9 +505,26 @@ class WCOTL_Auto_Sync {
     }
 
     /**
+     * Build and return the FedEx provider if configured, or null.
+     *
+     * @return WCOTL_Fedex_Provider|null
+     */
+    public static function get_fedex_provider(): ?WCOTL_Fedex_Provider {
+        $client_id     = get_option( 'wcotl_fedex_client_id', '' );
+        $client_secret = get_option( 'wcotl_fedex_client_secret', '' );
+        $environment   = get_option( 'wcotl_fedex_environment', 'production' );
+        if ( ! $client_id || ! $client_secret ) {
+            return null;
+        }
+        $provider = new WCOTL_Fedex_Provider( $client_id, $client_secret, $environment );
+        return $provider->is_configured() ? $provider : null;
+    }
+
+    /**
      * Resolve and return the correct provider for a specific tracking code.
      *
      * The provider slug is stored in META_PROVIDER:
+     *   'fedex' => FedEx provider
      *   'packlink' => Packlink PRO provider
      *   '17track' or '' (default) => 17TRACK provider
      *
@@ -516,6 +533,9 @@ class WCOTL_Auto_Sync {
      */
     public static function get_provider_for_code( string $tracking_code ): ?WCOTL_Tracking_Provider {
         $slug = WCOTL_DB::get_meta( $tracking_code, self::META_PROVIDER ) ?: '17track';
+        if ( $slug === 'fedex' ) {
+            return self::get_fedex_provider();
+        }
         if ( $slug === 'packlink' ) {
             return self::get_packlink_provider();
         }
@@ -527,7 +547,7 @@ class WCOTL_Auto_Sync {
      * Used by run_sync() to bail early when nothing is usable.
      */
     public static function has_any_provider(): bool {
-        return self::get_provider() !== null || self::get_packlink_provider() !== null;
+        return self::get_provider() !== null || self::get_packlink_provider() !== null || self::get_fedex_provider() !== null;
     }
 
     /* ------------------------------------------------------------------

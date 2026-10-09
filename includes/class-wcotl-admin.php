@@ -478,8 +478,20 @@ class WCOTL_Admin {
         // Determine which providers are configured.
         $has_17track         = (bool) get_option( 'wcotl_17track_api_key', '' );
         $has_packlink        = WCOTL_Packlink_Provider::is_packlink_plugin_active() && (bool) get_option( 'wcotl_packlink_api_key', '' );
-        $provider_active     = $has_17track || $has_packlink;
+        $has_fedex           = (bool) ( get_option( 'wcotl_fedex_client_id', '' ) && get_option( 'wcotl_fedex_client_secret', '' ) );
+        $provider_active     = $has_17track || $has_packlink || $has_fedex;
         $packlink_available  = WCOTL_Packlink_Provider::is_packlink_plugin_active();
+
+        $available_providers = [];
+        if ( $has_17track ) {
+            $available_providers['17track'] = '17TRACK';
+        }
+        if ( $has_packlink && $packlink_available ) {
+            $available_providers['packlink'] = 'Packlink PRO';
+        }
+        if ( $has_fedex ) {
+            $available_providers['fedex'] = 'FedEx';
+        }
 
         echo wp_kses_post( $notice );
         ?>
@@ -630,25 +642,28 @@ class WCOTL_Admin {
 
             <!-- Provider selector + tracking reference form -->
             <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
-                <?php if ( $has_17track && ( $packlink_available && $has_packlink ) ) : ?>
-                <!-- Show provider selector only when both providers are configured -->
+                <?php if ( count( $available_providers ) > 1 ) : ?>
+                <!-- Show provider selector when multiple providers are configured -->
                 <div class="wcotl-form-row" style="margin-bottom:0;width:200px;">
                     <label>Provider</label>
                     <select id="wcotl-provider-select" onchange="wcotlOnProviderChange()">
-                        <option value="17track" <?php selected( $at_provider, '17track' ); ?>>17TRACK</option>
-                        <option value="packlink" <?php selected( $at_provider, 'packlink' ); ?>>Packlink PRO</option>
+                        <?php foreach ( $available_providers as $p_slug => $p_name ) : ?>
+                            <option value="<?php echo esc_attr( $p_slug ); ?>" <?php selected( $at_provider, $p_slug ); ?>><?php echo esc_html( $p_name ); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
-                <?php elseif ( $has_17track ) : ?>
-                <input type="hidden" id="wcotl-provider-select" value="17track">
-                <?php elseif ( $has_packlink ) : ?>
-                <input type="hidden" id="wcotl-provider-select" value="packlink">
+                <?php elseif ( count( $available_providers ) === 1 ) : ?>
+                    <input type="hidden" id="wcotl-provider-select" value="<?php echo esc_attr( array_key_first( $available_providers ) ); ?>">
+                <?php else : ?>
+                    <input type="hidden" id="wcotl-provider-select" value="17track">
                 <?php endif; ?>
 
                 <div class="wcotl-form-row" style="margin-bottom:0;width:260px;">
                     <label id="wcotl-real-number-label">
                         <?php if ( $at_provider === 'packlink' ) : ?>
                             Packlink Shipment Reference
+                        <?php elseif ( $at_provider === 'fedex' ) : ?>
+                            FedEx Tracking Number
                         <?php else : ?>
                             Carrier tracking number
                         <?php endif; ?>
@@ -656,6 +671,8 @@ class WCOTL_Admin {
                             <span class="tooltiptext" id="wcotl-real-number-tip">
                                 <?php if ( $at_provider === 'packlink' ) : ?>
                                     The Packlink Shipment Reference (e.g. ESXXXXXXXXXXXXXX) from your Packlink PRO account.
+                                <?php elseif ( $at_provider === 'fedex' ) : ?>
+                                    The FedEx tracking number (e.g. 123456789012). Used to query the FedEx Track API.
                                 <?php else : ?>
                                     The real carrier tracking code (e.g. RR123456789CN). Used to query 17TRACK.
                                 <?php endif; ?>
@@ -664,12 +681,20 @@ class WCOTL_Admin {
                     </label>
                     <input type="text" id="wcotl-real-number"
                            value="<?php echo esc_attr($at_real_number ?: ''); ?>"
-                           placeholder="<?php echo esc_attr( $at_provider === 'packlink' ? 'e.g. ESXXXXXXXXXXXXXX' : 'e.g. RR123456789CN' ); ?>"
+                           placeholder="<?php
+                               if ( $at_provider === 'packlink' ) {
+                                   echo 'e.g. ESXXXXXXXXXXXXXX';
+                               } elseif ( $at_provider === 'fedex' ) {
+                                   echo 'e.g. 123456789012';
+                               } else {
+                                   echo 'e.g. RR123456789CN';
+                               }
+                           ?>"
                            style="font-family:monospace;">
                 </div>
 
                 <!-- Carrier selector: only relevant for 17TRACK -->
-                <div id="wcotl-carrier-row" class="wcotl-form-row" style="margin-bottom:0;width:260px;<?php echo $at_provider === 'packlink' ? 'display:none;' : ''; ?>">
+                <div id="wcotl-carrier-row" class="wcotl-form-row" style="margin-bottom:0;width:260px;<?php echo ( $at_provider === 'packlink' || $at_provider === 'fedex' ) ? 'display:none;' : ''; ?>">
                     <label>Carrier
                         <span class="dashicons dashicons-info tooltip">
                             <span class="tooltiptext">Click "Detect carrier" to let 17TRACK suggest carriers automatically. If none are detected, enter the carrier code manually (find codes at <a href="https://www.17track.net/en/carriers" target="_blank">17track.net/carrier-codes</a>).</span>
@@ -682,7 +707,7 @@ class WCOTL_Admin {
                         <?php endif; ?>
                     </select>
                 </div>
-                <div id="wcotl-carrier-btn-row" style="<?php echo $at_provider === 'packlink' ? 'display:none;' : 'display:flex;'; ?>gap:6px;">
+                <div id="wcotl-carrier-btn-row" style="<?php echo ( $at_provider === 'packlink' || $at_provider === 'fedex' ) ? 'display:none;' : 'display:flex;'; ?>gap:6px;">
                     <button class="button button-secondary button-small"
                             id="wcotl-detect-carrier-btn"
                             onclick="wcotlDetectCarriers()">🔍 Detect carrier</button>
@@ -729,11 +754,19 @@ class WCOTL_Admin {
                     carrierRow.style.display    = 'none';
                     carrierBtnRow.style.display = 'none';
                     inputEl.placeholder         = 'e.g. ESXXXXXXXXXXXXXX';
-                    if (tipEl) tipEl.textContent = 'The Packlink Shipment Reference from your Packlink PRO account.';
+                    if (labelEl && labelEl.childNodes.length > 0) labelEl.childNodes[0].textContent = 'Packlink Shipment Reference ';
+                    if (tipEl) tipEl.textContent = 'The Packlink Shipment Reference (e.g. ESXXXXXXXXXXXXXX) from your Packlink PRO account.';
+                } else if ( provider === 'fedex' ) {
+                    carrierRow.style.display    = 'none';
+                    carrierBtnRow.style.display = 'none';
+                    inputEl.placeholder         = 'e.g. 123456789012';
+                    if (labelEl && labelEl.childNodes.length > 0) labelEl.childNodes[0].textContent = 'FedEx Tracking Number ';
+                    if (tipEl) tipEl.textContent = 'The FedEx tracking number (e.g. 123456789012). Used to query the FedEx Track API.';
                 } else {
                     carrierRow.style.display    = '';
                     carrierBtnRow.style.display = '';
                     inputEl.placeholder         = 'e.g. RR123456789CN';
+                    if (labelEl && labelEl.childNodes.length > 0) labelEl.childNodes[0].textContent = 'Carrier tracking number ';
                     if (tipEl) tipEl.textContent = 'The real carrier tracking code (e.g. RR123456789CN). Used to query 17TRACK.';
                 }
             }
