@@ -467,7 +467,7 @@ class WCOTL_Admin {
 
         // Auto-tracking meta
         $at_real_number  = WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_REAL_NUMBER );
-        $at_carrier      = (int) ( WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_CARRIER_CODE ) ?: 0 );
+        $at_carrier      = WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_CARRIER_CODE ) ?: '';
         $at_registered   = WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_REGISTERED );
         $at_last_status  = WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_LAST_STATUS );
         $at_last_event   = WCOTL_DB::get_meta( $code, WCOTL_Auto_Sync::META_LAST_EVENT_DATE );
@@ -477,14 +477,18 @@ class WCOTL_Admin {
 
         // Determine which providers are configured.
         $has_17track         = (bool) get_option( 'wcotl_17track_api_key', '' );
+        $has_track123        = (bool) get_option( 'wcotl_track123_api_key', '' );
         $has_packlink        = WCOTL_Packlink_Provider::is_packlink_plugin_active() && (bool) get_option( 'wcotl_packlink_api_key', '' );
         $has_fedex           = (bool) ( get_option( 'wcotl_fedex_client_id', '' ) && get_option( 'wcotl_fedex_client_secret', '' ) );
-        $provider_active     = $has_17track || $has_packlink || $has_fedex;
+        $provider_active     = $has_17track || $has_track123 || $has_packlink || $has_fedex;
         $packlink_available  = WCOTL_Packlink_Provider::is_packlink_plugin_active();
 
         $available_providers = [];
         if ( $has_17track ) {
             $available_providers['17track'] = '17TRACK';
+        }
+        if ( $has_track123 ) {
+            $available_providers['track123'] = 'Track123';
         }
         if ( $has_packlink && $packlink_available ) {
             $available_providers['packlink'] = 'Packlink PRO';
@@ -673,6 +677,8 @@ class WCOTL_Admin {
                                     The Packlink Shipment Reference (e.g. ESXXXXXXXXXXXXXX) from your Packlink PRO account.
                                 <?php elseif ( $at_provider === 'fedex' ) : ?>
                                     The FedEx tracking number (e.g. 123456789012). Used to query the FedEx Track API.
+                                <?php elseif ( $at_provider === 'track123' ) : ?>
+                                    The real carrier tracking number (e.g. 9400111899223857481234). Used to query Track123.
                                 <?php else : ?>
                                     The real carrier tracking code (e.g. RR123456789CN). Used to query 17TRACK.
                                 <?php endif; ?>
@@ -686,6 +692,8 @@ class WCOTL_Admin {
                                    echo 'e.g. ESXXXXXXXXXXXXXX';
                                } elseif ( $at_provider === 'fedex' ) {
                                    echo 'e.g. 123456789012';
+                               } elseif ( $at_provider === 'track123' ) {
+                                   echo 'e.g. 9400111899223857481234';
                                } else {
                                    echo 'e.g. RR123456789CN';
                                }
@@ -693,17 +701,25 @@ class WCOTL_Admin {
                            style="font-family:monospace;">
                 </div>
 
-                <!-- Carrier selector: only relevant for 17TRACK -->
+                <!-- Carrier selector: relevant for 17TRACK and Track123 -->
                 <div id="wcotl-carrier-row" class="wcotl-form-row" style="margin-bottom:0;width:260px;<?php echo ( $at_provider === 'packlink' || $at_provider === 'fedex' ) ? 'display:none;' : ''; ?>">
                     <label>Carrier
                         <span class="dashicons dashicons-info tooltip">
-                            <span class="tooltiptext">Click "Detect carrier" to let 17TRACK suggest carriers automatically. If none are detected, enter the carrier code manually (find codes at <a href="https://www.17track.net/en/carriers" target="_blank">17track.net/carrier-codes</a>).</span>
+                            <span class="tooltiptext" id="wcotl-carrier-tip">
+                                <?php if ( $at_provider === 'track123' ) : ?>
+                                    Click "Detect carrier" to let Track123 suggest carriers automatically, or select one manually.
+                                <?php else : ?>
+                                    Click "Detect carrier" to let 17TRACK suggest carriers automatically. If none are detected, enter the carrier code manually (find codes at <a href="https://www.17track.net/en/carriers" target="_blank">17track.net/carrier-codes</a>).
+                                <?php endif; ?>
+                            </span>
                         </span>
                     </label>
                     <select id="wcotl-carrier-select">
                         <option value="0">— Auto-detect —</option>
-                        <?php if ( $at_carrier ) : ?>
-                            <option value="<?php echo $at_carrier; ?>" selected>Carrier #<?php echo $at_carrier; ?> (saved)</option>
+                        <?php if ( $at_carrier !== '' && $at_carrier !== 0 && $at_carrier !== '0' ) : ?>
+                            <option value="<?php echo esc_attr( $at_carrier ); ?>" selected>
+                                <?php echo esc_html( is_numeric( $at_carrier ) ? "Carrier #{$at_carrier} (saved)" : "Carrier: {$at_carrier} (saved)" ); ?>
+                            </option>
                         <?php endif; ?>
                     </select>
                 </div>
@@ -762,9 +778,15 @@ class WCOTL_Admin {
                     inputEl.placeholder         = 'e.g. 123456789012';
                     if (labelEl && labelEl.childNodes.length > 0) labelEl.childNodes[0].textContent = 'FedEx Tracking Number ';
                     if (tipEl) tipEl.textContent = 'The FedEx tracking number (e.g. 123456789012). Used to query the FedEx Track API.';
+                } else if ( provider === 'track123' ) {
+                    carrierRow.style.display    = '';
+                    carrierBtnRow.style.display = 'flex';
+                    inputEl.placeholder         = 'e.g. 9400111899223857481234';
+                    if (labelEl && labelEl.childNodes.length > 0) labelEl.childNodes[0].textContent = 'Carrier tracking number ';
+                    if (tipEl) tipEl.textContent = 'The real carrier tracking number (e.g. 9400111899223857481234). Used to query Track123.';
                 } else {
                     carrierRow.style.display    = '';
-                    carrierBtnRow.style.display = '';
+                    carrierBtnRow.style.display = 'flex';
                     inputEl.placeholder         = 'e.g. RR123456789CN';
                     if (labelEl && labelEl.childNodes.length > 0) labelEl.childNodes[0].textContent = 'Carrier tracking number ';
                     if (tipEl) tipEl.textContent = 'The real carrier tracking code (e.g. RR123456789CN). Used to query 17TRACK.';
@@ -782,9 +804,10 @@ class WCOTL_Admin {
                     method: 'POST',
                     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                     body: new URLSearchParams({
-                        action: 'wcotl_detect_carriers',
-                        nonce:  WCOTL_AJAX.nonce,
-                        number: num
+                        action:   'wcotl_detect_carriers',
+                        nonce:    WCOTL_AJAX.nonce,
+                        number:   num,
+                        provider: wcotlGetProvider()
                     })
                 }).then(r => r.json()).then(res => {
                     if (!res.success) { msg.style.color = '#c0392b'; msg.textContent = '❌ ' + (res.data || 'Error'); return; }
@@ -813,10 +836,46 @@ class WCOTL_Admin {
             }
 
             // ---- Carrier search (manual fallback) ----
-            var _wcotlCarrierList  = null; // cached full list [{key, name, country}]
-            var _wcotlCarrierFetch = null; // in-flight promise
+            var _wcotlCarrierList         = null; // cached full list [{key, name, country}]
+            var _wcotlCarrierFetch        = null; // in-flight promise
+            var _wcotlTrack123CarrierList = null; // cached Track123 list [{key, name, country}]
+            var _wcotlTrack123Fetch       = null; // in-flight promise
 
             function wcotlLoadCarrierList() {
+                var provider = wcotlGetProvider();
+                if ( provider === 'track123' ) {
+                    if (_wcotlTrack123CarrierList) return Promise.resolve(_wcotlTrack123CarrierList);
+                    if (_wcotlTrack123Fetch) return _wcotlTrack123Fetch;
+                    var status = document.getElementById('wcotl-carrier-search-status');
+                    status.textContent = '⏳ Loading Track123 courier list…';
+                    _wcotlTrack123Fetch = fetch(WCOTL_AJAX.url, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                        body: new URLSearchParams({
+                            action: 'wcotl_get_track123_carriers',
+                            nonce:  WCOTL_AJAX.nonce
+                        })
+                    }).then(r => r.json()).then(res => {
+                        if (!res.success) {
+                            status.textContent = '❌ Could not load Track123 courier list.';
+                            return [];
+                        }
+                        _wcotlTrack123CarrierList = (res.data || []).map(function(c) {
+                            return {
+                                key: c.courierCode || c.key,
+                                name: c.courierNameEN || c.name || c.courierCode,
+                                country: c.courierNameCN || ''
+                            };
+                        });
+                        status.textContent = _wcotlTrack123CarrierList.length + ' couriers loaded. Type to search.';
+                        return _wcotlTrack123CarrierList;
+                    }).catch(() => {
+                        status.textContent = '❌ Could not load Track123 courier list.';
+                        return [];
+                    });
+                    return _wcotlTrack123Fetch;
+                }
+
                 if (_wcotlCarrierList) return Promise.resolve(_wcotlCarrierList);
                 if (_wcotlCarrierFetch) return _wcotlCarrierFetch;
                 var status = document.getElementById('wcotl-carrier-search-status');

@@ -46,7 +46,7 @@ class WCOTL_Auto_Sync {
 
     /**
      * Meta key: provider slug assigned to this tracking code.
-     * '17track' (default/empty), 'packlink', or 'fedex'.
+     * '17track' (default/empty), 'track123', 'packlink', or 'fedex'.
      */
     const META_PROVIDER = 'auto_tracking_provider';
 
@@ -238,7 +238,8 @@ class WCOTL_Auto_Sync {
             ];
         }
 
-        $carrier_code = (int) ( WCOTL_DB::get_meta( $tracking_code, self::META_CARRIER_CODE ) ?: 0 );
+        $raw_carrier  = WCOTL_DB::get_meta( $tracking_code, self::META_CARRIER_CODE ) ?: '';
+        $carrier_code = ( is_numeric( $raw_carrier ) && $raw_carrier !== '' ) ? (int) $raw_carrier : (string) $raw_carrier;
         $registered   = WCOTL_DB::get_meta( $tracking_code, self::META_REGISTERED );
 
         // Register with provider if not done yet.
@@ -253,16 +254,16 @@ class WCOTL_Auto_Sync {
                     'events_added' => 0,
                 ];
             }
-            if ( $reg['carrier_code'] ) {
-                WCOTL_DB::set_meta( $tracking_code, self::META_CARRIER_CODE, $reg['carrier_code'] );
-                $carrier_code = (int) $reg['carrier_code'];
+            if ( ! empty( $reg['carrier_code'] ) ) {
+                WCOTL_DB::set_meta( $tracking_code, self::META_CARRIER_CODE, (string) $reg['carrier_code'] );
+                $carrier_code = $reg['carrier_code'];
             }
             WCOTL_DB::set_meta( $tracking_code, self::META_REGISTERED, '1' );
             WCOTL_DB::set_meta( $tracking_code, self::META_FIRST_REGISTERED, current_time( 'mysql' ) );
         }
 
         // Fetch latest events.
-        $info = $provider->get_tracking_info( $real_number, $carrier_code );
+        $info = $provider->get_tracking_info( $real_number, $carrier_code ?: 0 );
         if ( ! $info['success'] ) {
             self::log( "Fetch failed for {$tracking_code} ({$real_number}): " . ( $info['error'] ?? '?' ) );
             return [
@@ -492,6 +493,18 @@ class WCOTL_Auto_Sync {
     }
 
     /**
+     * Build and return the Track123 provider if configured, or null.
+     *
+     * @return WCOTL_Track123_Provider|null
+     */
+    public static function get_track123_provider(): ?WCOTL_Track123_Provider {
+        $api_key = get_option( 'wcotl_track123_api_key', '' );
+        if ( ! $api_key ) return null;
+        $provider = new WCOTL_Track123_Provider( $api_key );
+        return $provider->is_configured() ? $provider : null;
+    }
+
+    /**
      * Build and return the Packlink PRO provider if configured, or null.
      *
      * @return WCOTL_Packlink_Provider|null
@@ -524,6 +537,7 @@ class WCOTL_Auto_Sync {
      * Resolve and return the correct provider for a specific tracking code.
      *
      * The provider slug is stored in META_PROVIDER:
+     *   'track123' => Track123 provider
      *   'fedex' => FedEx provider
      *   'packlink' => Packlink PRO provider
      *   '17track' or '' (default) => 17TRACK provider
@@ -533,6 +547,9 @@ class WCOTL_Auto_Sync {
      */
     public static function get_provider_for_code( string $tracking_code ): ?WCOTL_Tracking_Provider {
         $slug = WCOTL_DB::get_meta( $tracking_code, self::META_PROVIDER ) ?: '17track';
+        if ( $slug === 'track123' ) {
+            return self::get_track123_provider();
+        }
         if ( $slug === 'fedex' ) {
             return self::get_fedex_provider();
         }
@@ -547,7 +564,10 @@ class WCOTL_Auto_Sync {
      * Used by run_sync() to bail early when nothing is usable.
      */
     public static function has_any_provider(): bool {
-        return self::get_provider() !== null || self::get_packlink_provider() !== null || self::get_fedex_provider() !== null;
+        return self::get_provider() !== null
+            || self::get_track123_provider() !== null
+            || self::get_packlink_provider() !== null
+            || self::get_fedex_provider() !== null;
     }
 
     /* ------------------------------------------------------------------

@@ -20,6 +20,8 @@ class WCOTL_Settings {
         add_action( 'admin_post_wcotl_save_settings', [ __CLASS__, 'save_settings' ] );
         // AJAX: carrier auto-detect
         add_action( 'wp_ajax_wcotl_detect_carriers',  [ __CLASS__, 'ajax_detect_carriers' ] );
+        // AJAX: fetch Track123 courier list
+        add_action( 'wp_ajax_wcotl_get_track123_carriers', [ __CLASS__, 'ajax_get_track123_carriers' ] );
         // AJAX: manually trigger sync for a single code
         add_action( 'wp_ajax_wcotl_sync_now',         [ __CLASS__, 'ajax_sync_now' ] );
         // AJAX: register / update real tracking number for a code
@@ -53,6 +55,7 @@ class WCOTL_Settings {
 
     public static function register_settings(): void {
         register_setting( 'wcotl_settings_group', 'wcotl_17track_api_key',           'sanitize_text_field' );
+        register_setting( 'wcotl_settings_group', 'wcotl_track123_api_key',          'sanitize_text_field' );
         register_setting( 'wcotl_settings_group', 'wcotl_packlink_api_key',          'sanitize_text_field' );
         register_setting( 'wcotl_settings_group', 'wcotl_fedex_client_id',           'sanitize_text_field' );
         register_setting( 'wcotl_settings_group', 'wcotl_fedex_client_secret',       'sanitize_text_field' );
@@ -78,6 +81,10 @@ class WCOTL_Settings {
         if ( isset( $_POST['wcotl_17track_api_key'] ) ) {
             $api_key = sanitize_text_field( wp_unslash( $_POST['wcotl_17track_api_key'] ) );
             update_option( 'wcotl_17track_api_key', $api_key );
+        }
+        if ( isset( $_POST['wcotl_track123_api_key'] ) ) {
+            $track123_key = sanitize_text_field( wp_unslash( $_POST['wcotl_track123_api_key'] ) );
+            update_option( 'wcotl_track123_api_key', $track123_key );
         }
         if ( isset( $_POST['wcotl_packlink_api_key'] ) ) {
             $packlink_key = sanitize_text_field( wp_unslash( $_POST['wcotl_packlink_api_key'] ) );
@@ -135,14 +142,39 @@ class WCOTL_Settings {
             wp_send_json_error( 'Not allowed.' );
         }
 
-        $number   = sanitize_text_field( wp_unslash( $_POST['number'] ?? '' ) );
-        $provider = WCOTL_Auto_Sync::get_provider();
+        $number        = sanitize_text_field( wp_unslash( $_POST['number'] ?? '' ) );
+        $provider_slug = sanitize_key( wp_unslash( $_POST['provider'] ?? '17track' ) );
+        $provider      = match( $provider_slug ) {
+            'track123' => WCOTL_Auto_Sync::get_track123_provider(),
+            'packlink' => WCOTL_Auto_Sync::get_packlink_provider(),
+            'fedex'    => WCOTL_Auto_Sync::get_fedex_provider(),
+            default    => WCOTL_Auto_Sync::get_provider(),
+        };
 
         if ( ! $provider ) {
-            wp_send_json_error( 'No API key configured.' );
+            wp_send_json_error( 'No API key configured for the selected provider.' );
         }
 
         $carriers = $provider->detect_carriers( $number );
+        wp_send_json_success( $carriers );
+    }
+
+    /* ------------------------------------------------------------------
+     * AJAX: fetch Track123 supported courier list for manual search
+     * ------------------------------------------------------------------ */
+
+    public static function ajax_get_track123_carriers(): void {
+        check_ajax_referer( 'wcotl_admin_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( 'Not allowed.' );
+        }
+
+        $provider = WCOTL_Auto_Sync::get_track123_provider();
+        if ( ! $provider ) {
+            wp_send_json_error( 'Track123 API is not configured.' );
+        }
+
+        $carriers = $provider->get_courier_list();
         wp_send_json_success( $carriers );
     }
 
@@ -158,12 +190,22 @@ class WCOTL_Settings {
 
         $tracking_code = sanitize_text_field( wp_unslash( $_POST['tracking_code'] ?? '' ) );
         $real_number   = sanitize_text_field( wp_unslash( $_POST['real_number'] ?? '' ) );
-        $carrier_code  = absint( $_POST['carrier_code'] ?? 0 );
         $provider_slug = sanitize_key( $_POST['provider'] ?? '17track' );
 
         // Validate provider slug.
-        if ( ! in_array( $provider_slug, [ '17track', 'packlink', 'fedex' ], true ) ) {
+        if ( ! in_array( $provider_slug, [ '17track', 'track123', 'packlink', 'fedex' ], true ) ) {
             $provider_slug = '17track';
+        }
+
+        if ( $provider_slug === 'track123' ) {
+            $carrier_code = sanitize_text_field( wp_unslash( $_POST['carrier_code'] ?? '' ) );
+            if ( $carrier_code === '0' ) {
+                $carrier_code = '';
+            }
+        } elseif ( $provider_slug === 'packlink' || $provider_slug === 'fedex' ) {
+            $carrier_code = '';
+        } else {
+            $carrier_code = absint( $_POST['carrier_code'] ?? 0 );
         }
 
         if ( ! $tracking_code ) {
@@ -183,16 +225,19 @@ class WCOTL_Settings {
 
         if ( $real_number ) {
             $prev_real_number  = WCOTL_DB::get_meta( $tracking_code, WCOTL_Auto_Sync::META_REAL_NUMBER );
-            $prev_carrier_code = (int) ( WCOTL_DB::get_meta( $tracking_code, WCOTL_Auto_Sync::META_CARRIER_CODE ) ?: 0 );
+            $raw_prev_carrier  = WCOTL_DB::get_meta( $tracking_code, WCOTL_Auto_Sync::META_CARRIER_CODE ) ?: '';
+            $prev_carrier_code = is_numeric( $raw_prev_carrier ) ? (int) $raw_prev_carrier : $raw_prev_carrier;
             $prev_provider     = WCOTL_DB::get_meta( $tracking_code, WCOTL_Auto_Sync::META_PROVIDER ) ?: '17track';
 
-            $changed = ( $prev_real_number !== $real_number ) || ( $prev_carrier_code !== $carrier_code ) || ( $prev_provider !== $provider_slug );
+            $changed = ( $prev_real_number !== $real_number ) || ( (string) $prev_carrier_code !== (string) $carrier_code ) || ( $prev_provider !== $provider_slug );
 
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_REAL_NUMBER,  $real_number );
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_PROVIDER,     $provider_slug );
-            // Carrier code is only meaningful for 17TRACK; clear it for Packlink and FedEx.
+            // Carrier code is only meaningful for 17TRACK and Track123; clear it for Packlink and FedEx.
             if ( $provider_slug === 'packlink' || $provider_slug === 'fedex' ) {
                 WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_CARRIER_CODE, '' );
+            } elseif ( $provider_slug === 'track123' ) {
+                WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_CARRIER_CODE, $carrier_code );
             } else {
                 WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_CARRIER_CODE, $carrier_code ?: '' );
             }
@@ -291,6 +336,7 @@ class WCOTL_Settings {
 
     public static function page(): void {
         $api_key                   = get_option( 'wcotl_17track_api_key', '' );
+        $track123_api_key          = get_option( 'wcotl_track123_api_key', '' );
         $packlink_api_key          = get_option( 'wcotl_packlink_api_key', '' );
         $fedex_client_id           = get_option( 'wcotl_fedex_client_id', '' );
         $fedex_client_secret       = get_option( 'wcotl_fedex_client_secret', '' );
@@ -379,7 +425,7 @@ class WCOTL_Settings {
                             <span>
                                 <strong>Erase all data upon uninstall</strong>
                                 <span style="font-size:12px;color:#646970;display:block;margin-top:2px;line-height:1.4;">
-                                    If enabled, all database tables (<code>order_timeline</code>, <code>order_timeline_meta</code>, <code>order_timeline_presets</code>) and settings will be permanently dropped when deleting the plugin. If unchecked (default), all data and configurations are retained.
+                                     If enabled, all database tables (<code>order_timeline</code>, <code>order_timeline_meta</code>, <code>order_timeline_presets</code>) and settings will be permanently dropped when deleting the plugin. If unchecked (default), all data and configurations are retained.
                                 </span>
                             </span>
                         </label>
@@ -387,6 +433,44 @@ class WCOTL_Settings {
 
                     <button type="submit" name="wcotl_save_general_settings" value="1" class="button button-primary" style="margin-top:16px;">
                         Save Settings
+                    </button>
+                </form>
+            </div>
+
+            <!-- Track123 API -->
+            <div class="card" style="max-width:620px;margin-top:20px;">
+                <h2><span class="dashicons dashicons-location"></span> Track123 API</h2>
+                <p style="font-size:13px;color:#646970;margin-bottom:16px;">
+                    Enter your Track123 API Secret to enable auto-tracking via Track123.
+                    Get your API key from the <a href="https://member.track123.com/api" target="_blank">Track123 Admin Portal (Developers → API)</a>.
+                    Supports over 1,700 couriers worldwide with automated tracking updates and carrier auto-detection.
+                </p>
+
+                <form method="POST" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
+                    <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
+                    <input type="hidden" name="action" value="wcotl_save_settings">
+
+                    <div class="wcotl-form-row">
+                        <label>
+                            Track123 API Key / Secret
+                            <?php if ( $track123_api_key ) : ?>
+                                <span style="color:#008a20;font-size:11px;margin-left:6px;">✓ Configured</span>
+                            <?php endif; ?>
+                        </label>
+                        <div style="display:flex;gap:6px;">
+                            <input type="password" id="wcotl_track123_key_field" name="wcotl_track123_api_key"
+                                   value="<?php echo esc_attr( $track123_api_key ); ?>"
+                                   placeholder="Paste your Track123 API Secret here"
+                                   style="font-family:monospace;flex:1;">
+                            <button type="button" class="button" onclick="var f = document.getElementById('wcotl_track123_key_field'); f.type = f.type === 'password' ? 'text' : 'password'; this.textContent = f.type === 'password' ? 'Show' : 'Hide';">Show</button>
+                        </div>
+                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
+                            Leave empty to disable Track123 auto-tracking.
+                        </small>
+                    </div>
+
+                    <button type="submit" class="button button-primary" style="margin-top:8px;">
+                        Save Track123 Settings
                     </button>
                 </form>
             </div>
@@ -571,7 +655,7 @@ class WCOTL_Settings {
             <div class="card" style="max-width:620px;background:#f0f7ff;border-color:#b8d4f8;">
                 <h2 style="color:#1a5fa8;">ℹ How auto-tracking works</h2>
                 <ul style="font-size:13px;line-height:1.9;color:#2d4a6e;padding-left:18px;">
-                    <li>For each plugin tracking code, you can attach a shipment reference from <strong>17TRACK</strong>, <strong>Packlink PRO</strong>, or <strong>FedEx</strong>.</li>
+                    <li>For each plugin tracking code, you can attach a shipment reference from <strong>17TRACK</strong>, <strong>Track123</strong>, <strong>Packlink PRO</strong>, or <strong>FedEx</strong>.</li>
                     <li>The plugin polls active tracking providers every <strong><?php echo $sync_interval; ?> hour(s)</strong> and automatically imports new updates as timeline steps.</li>
                     <li>Existing manual steps <strong>are never modified or deleted</strong>: they coexist alongside automatic ones.</li>
                     <li>When the carrier reports the <strong>Delivered</strong> status, the actual delivery date is set automatically.</li>

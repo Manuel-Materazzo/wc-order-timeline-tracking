@@ -100,11 +100,11 @@ class WCOTL_Fedex_Provider extends WCOTL_Tracking_Provider {
      * FedEx does not require pre-registration of tracking numbers.
      * Always returns success.
      *
-     * @param string   $real_tracking_number Carrier tracking number.
-     * @param int|null $carrier_code         Unused (carrier is FedEx).
+     * @param string          $real_tracking_number Carrier tracking number.
+     * @param int|string|null $carrier_code         Unused (carrier is FedEx).
      * @return array{success:bool, carrier_code:int|null, error:string|null}
      */
-    public function register_shipment( string $real_tracking_number, ?int $carrier_code = null ): array {
+    public function register_shipment( string $real_tracking_number, int|string|null $carrier_code = null ): array {
         return [
             'success'      => true,
             'carrier_code' => null,
@@ -115,11 +115,11 @@ class WCOTL_Fedex_Provider extends WCOTL_Tracking_Provider {
     /**
      * Fetch latest tracking events from the FedEx Track API.
      *
-     * @param string $real_tracking_number Tracking number (e.g. 123456789012).
-     * @param int    $carrier_code         Unused.
+     * @param string     $real_tracking_number Tracking number (e.g. 123456789012).
+     * @param int|string $carrier_code         Unused.
      * @return array{success:bool, status:string, events:array, raw:array, error:string|null}
      */
-    public function get_tracking_info( string $real_tracking_number, int $carrier_code = 0 ): array {
+    public function get_tracking_info( string $real_tracking_number, int|string $carrier_code = 0 ): array {
         $clean_number = trim( $real_tracking_number );
         if ( empty( $clean_number ) ) {
             return $this->error_response( 'FedEx tracking number is empty.' );

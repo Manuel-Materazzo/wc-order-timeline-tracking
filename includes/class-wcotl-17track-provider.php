@@ -72,14 +72,15 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
     /**
      * Register a shipment with 17TRACK.
      *
-     * @param string   $real_tracking_number Carrier tracking number.
-     * @param int|null $carrier_code         Provider-specific carrier code (null = auto-detect).
+     * @param string          $real_tracking_number Carrier tracking number.
+     * @param int|string|null $carrier_code         Provider-specific carrier code (null = auto-detect).
      * @return array{success:bool, carrier_code:int|null, error:string|null}
      */
-    public function register_shipment( string $real_tracking_number, ?int $carrier_code = null ): array {
+    public function register_shipment( string $real_tracking_number, int|string|null $carrier_code = null ): array {
+        $numeric_carrier = ( $carrier_code !== null && is_numeric( $carrier_code ) && (int) $carrier_code > 0 ) ? (int) $carrier_code : null;
         $payload = [ [ 'number' => $real_tracking_number ] ];
-        if ( $carrier_code !== null && $carrier_code > 0 ) {
-            $payload[0]['carrier'] = $carrier_code;
+        if ( $numeric_carrier !== null ) {
+            $payload[0]['carrier'] = $numeric_carrier;
         }
 
         $response = $this->post( 'register', $payload );
@@ -110,7 +111,7 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
         if ( $rejected_code === -18019901 || stripos( $rejected_msg, 'don\'t need to repeat registration' ) !== false || stripos( $rejected_msg, 'has been registered' ) !== false ) {
             return [
                 'success'      => true,
-                'carrier_code' => isset( $rejected_item['carrier'] ) ? (int) $rejected_item['carrier'] : ( $carrier_code ?: null ),
+                'carrier_code' => isset( $rejected_item['carrier'] ) ? (int) $rejected_item['carrier'] : ( $numeric_carrier ?: null ),
                 'error'        => null,
             ];
         }
@@ -125,14 +126,15 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
     /**
      * Fetch latest tracking events.
      *
-     * @param string $real_tracking_number Carrier tracking number.
-     * @param int    $carrier_code         Provider-specific carrier code (0 = auto).
+     * @param string     $real_tracking_number Carrier tracking number.
+     * @param int|string $carrier_code         Provider-specific carrier code (0 = auto).
      * @return array{success:bool, status:string, events:array, raw:array, error:string|null}
      */
-    public function get_tracking_info( string $real_tracking_number, int $carrier_code = 0 ): array {
+    public function get_tracking_info( string $real_tracking_number, int|string $carrier_code = 0 ): array {
+        $numeric_carrier = is_numeric( $carrier_code ) ? (int) $carrier_code : 0;
         $payload_item = [ 'number' => $real_tracking_number ];
-        if ( $carrier_code > 0 ) {
-            $payload_item['carrier'] = $carrier_code;
+        if ( $numeric_carrier > 0 ) {
+            $payload_item['carrier'] = $numeric_carrier;
         }
 
         $response = $this->post( 'gettrackinfo', [ $payload_item ] );

@@ -29,26 +29,26 @@ abstract class WCOTL_Tracking_Provider {
     /**
      * Register a shipment with the provider to start tracking.
      *
-     * @param string   $real_tracking_number  Carrier tracking number (e.g. "RR123456789CN").
-     * @param int|null $carrier_code          Provider-specific carrier numeric code (null = auto-detect).
-     * @return array{success:bool, carrier_code:int|null, error:string|null}
+     * @param string          $real_tracking_number  Carrier tracking number (e.g. "RR123456789CN").
+     * @param int|string|null $carrier_code          Provider-specific carrier code (null = auto-detect).
+     * @return array{success:bool, carrier_code:int|string|null, error:string|null}
      */
-    abstract public function register_shipment( string $real_tracking_number, ?int $carrier_code = null ): array;
+    abstract public function register_shipment( string $real_tracking_number, int|string|null $carrier_code = null ): array;
 
     /**
      * Fetch the latest tracking events for a shipment.
      *
-     * @param string $real_tracking_number
-     * @param int    $carrier_code  Provider-specific carrier code (0 = auto).
+     * @param string     $real_tracking_number
+     * @param int|string $carrier_code  Provider-specific carrier code (0 or '' = auto).
      * @return array<string, mixed>
      */
-    abstract public function get_tracking_info( string $real_tracking_number, int $carrier_code = 0 ): array;
+    abstract public function get_tracking_info( string $real_tracking_number, int|string $carrier_code = 0 ): array;
 
     /**
      * Return carrier suggestions for a given tracking number (auto-detect).
      *
      * @param string $real_tracking_number
-     * @return array<int, string>  Map of carrier_code => carrier_name
+     * @return array<int|string, string>  Map of carrier_code => carrier_name
      */
     abstract public function detect_carriers( string $real_tracking_number ): array;
 }

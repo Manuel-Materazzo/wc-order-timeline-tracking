@@ -83,10 +83,10 @@ class WCOTL_Packlink_Provider extends WCOTL_Tracking_Provider {
      * Packlink does not require pre-registration of a shipment reference.
      * This is a no-op that always returns success.
      *
-     * @param string   $real_tracking_number  Packlink shipment reference.
-     * @param int|null $carrier_code          Unused (Packlink has no carrier codes).
+     * @param string          $real_tracking_number  Packlink shipment reference.
+     * @param int|string|null $carrier_code          Unused (Packlink has no carrier codes).
      */
-    public function register_shipment( string $real_tracking_number, ?int $carrier_code = null ): array {
+    public function register_shipment( string $real_tracking_number, int|string|null $carrier_code = null ): array {
         // No registration step needed with Packlink PRO.
         return [ 'success' => true, 'carrier_code' => null, 'error' => null ];
     }
@@ -129,10 +129,10 @@ class WCOTL_Packlink_Provider extends WCOTL_Tracking_Provider {
      * If /track returns 404 (common when the shipment has just been created or no carrier events exist yet),
      * we treat it as an empty event list rather than a fatal error.
      *
-     * @param string $real_tracking_number  Packlink shipment reference.
-     * @param int    $carrier_code          Unused.
+     * @param string     $real_tracking_number  Packlink shipment reference.
+     * @param int|string $carrier_code          Unused.
      */
-    public function get_tracking_info( string $real_tracking_number, int $carrier_code = 0 ): array {
+    public function get_tracking_info( string $real_tracking_number, int|string $carrier_code = 0 ): array {
         $clean_ref = trim( $real_tracking_number );
 
         // 1. Fetch shipment status.
