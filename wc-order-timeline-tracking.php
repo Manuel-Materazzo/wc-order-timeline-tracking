@@ -32,6 +32,7 @@ require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-admin.php';
 require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-admin-presets.php';
 require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-order-metabox.php';
 require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-refund-column.php';
+require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-order-actions.php';
 
 // Auto-tracking
 require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-tracking-provider.php';
@@ -50,6 +51,7 @@ class WCOTL_Plugin {
         WCOTL_Admin_Presets::init();
         WCOTL_Order_Metabox::init();
         WCOTL_Refund_Column::init();
+        WCOTL_Order_Actions::init();
         // Auto-tracking
         WCOTL_Auto_Sync::init();
         WCOTL_Settings::init();

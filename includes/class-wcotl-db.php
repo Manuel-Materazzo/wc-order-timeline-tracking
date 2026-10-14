@@ -16,6 +16,13 @@ class WCOTL_DB {
     private static array $delivered_at_cache = array();
 
     /**
+     * In-memory cache for tracking codes indexed by order_id.
+     *
+     * @var array<int, array<string>>
+     */
+    private static array $order_tracking_codes_cache = array();
+
+    /**
      * In-memory cache for presets.
      *
      * @var array|null
@@ -150,6 +157,9 @@ class WCOTL_DB {
         if ( $key === 'delivered_at' ) {
             self::clear_delivered_at_cache();
         }
+        if ( $key === 'order_id' ) {
+            self::clear_order_tracking_codes_cache();
+        }
     }
 
     public static function clear_delivered_at_cache( $order_id = null ): void {
@@ -249,6 +259,99 @@ class WCOTL_DB {
         self::prime_delivered_at_cache( array( $order_id ) );
 
         return self::$delivered_at_cache[ $order_id ] ? self::$delivered_at_cache[ $order_id ] : null;
+    }
+
+    public static function clear_order_tracking_codes_cache( $order_id = null ): void {
+        if ( null === $order_id ) {
+            self::$order_tracking_codes_cache = array();
+        } else {
+            unset( self::$order_tracking_codes_cache[ absint( $order_id ) ] );
+        }
+    }
+
+    public static function prime_tracking_codes_cache( $order_ids ): void {
+        if ( empty( $order_ids ) || ! is_array( $order_ids ) ) {
+            return;
+        }
+
+        $clean_ids = array();
+        foreach ( $order_ids as $id ) {
+            $id = absint( $id );
+            if ( $id > 0 && ! array_key_exists( $id, self::$order_tracking_codes_cache ) ) {
+                $clean_ids[ $id ] = $id;
+            }
+        }
+
+        if ( empty( $clean_ids ) ) {
+            return;
+        }
+
+        // Initialize all requested IDs with empty arrays to prevent re-querying
+        foreach ( $clean_ids as $id ) {
+            self::$order_tracking_codes_cache[ $id ] = array();
+        }
+
+        global $wpdb;
+        $table      = $wpdb->prefix . 'order_timeline';
+        $meta_table = $wpdb->prefix . 'order_timeline_meta';
+
+        $placeholders      = implode( ',', array_fill( 0, count( $clean_ids ), '%d' ) );
+        $meta_placeholders = implode( ',', array_fill( 0, count( $clean_ids ), '%s' ) );
+        $id_values         = array_values( $clean_ids );
+        $string_values     = array_map( 'strval', $id_values );
+
+        $query = $wpdb->prepare(
+            "SELECT order_id, tracking_code, MAX(latest_date) AS latest_date, MAX(latest_id) AS latest_id
+             FROM (
+                 SELECT order_id, tracking_code, MAX(step_date) AS latest_date, MAX(id) AS latest_id
+                 FROM {$table}
+                 WHERE order_id IN ($placeholders)
+                 GROUP BY order_id, tracking_code
+                 UNION ALL
+                 SELECT CAST(meta_value AS UNSIGNED) AS order_id, tracking_code, NULL AS latest_date, id AS latest_id
+                 FROM {$meta_table}
+                 WHERE meta_key = 'order_id'
+                   AND meta_value IN ($meta_placeholders)
+             ) AS combined
+             WHERE order_id > 0 AND tracking_code != ''
+             GROUP BY order_id, tracking_code
+             ORDER BY order_id ASC, latest_date DESC, latest_id DESC",
+            array_merge( $id_values, $string_values )
+        );
+
+        $results = $wpdb->get_results( $query );
+
+        if ( ! empty( $results ) ) {
+            foreach ( $results as $row ) {
+                $oid  = (int) $row->order_id;
+                $code = trim( (string) $row->tracking_code );
+                if ( $code !== '' && isset( self::$order_tracking_codes_cache[ $oid ] ) ) {
+                    if ( ! in_array( $code, self::$order_tracking_codes_cache[ $oid ], true ) ) {
+                        self::$order_tracking_codes_cache[ $oid ][] = $code;
+                    }
+                }
+            }
+        }
+    }
+
+    public static function get_tracking_codes_for_order( $order_id ): array {
+        $order_id = absint( $order_id );
+        if ( ! $order_id ) {
+            return array();
+        }
+
+        if ( array_key_exists( $order_id, self::$order_tracking_codes_cache ) ) {
+            return self::$order_tracking_codes_cache[ $order_id ];
+        }
+
+        self::prime_tracking_codes_cache( array( $order_id ) );
+
+        return self::$order_tracking_codes_cache[ $order_id ] ?? array();
+    }
+
+    public static function get_primary_tracking_code_for_order( $order_id ): ?string {
+        $codes = self::get_tracking_codes_for_order( $order_id );
+        return ! empty( $codes ) ? $codes[0] : null;
     }
 
 }

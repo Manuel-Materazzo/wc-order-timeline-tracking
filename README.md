@@ -15,6 +15,7 @@
 * **Carrier Auto-Detection**: Automatically detect courier services based on the tracking number (17TRACK and Track123 providers).
 * **Frontend Tracking Shortcode**: Display a sleek, modern, mobile-responsive tracking timeline to customers using `[wc_order_timeline_tracking]`.
 * **Refund Column Integration**: Adds timeline visibility directly inside WooCommerce admin order lists.
+* **Order List Quick Action**: One-click quick button in WooCommerce admin order lists (both classic CPT and HPOS) to jump straight to an order's tracking edit page.
 
 ---
 

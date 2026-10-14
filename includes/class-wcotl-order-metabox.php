@@ -29,20 +29,7 @@ class WCOTL_Order_Metabox {
     public static function render( $post_or_order ): void {
         global $wpdb;
         $order_id   = is_a( $post_or_order, 'WC_Order' ) ? $post_or_order->get_id() : $post_or_order->ID;
-        $table      = $wpdb->prefix . 'order_timeline';
-        $meta_table = $wpdb->prefix . 'order_timeline_meta';
-
-        // Query tracking codes from both timeline steps and timeline meta
-        $codes = $wpdb->get_col(
-            $wpdb->prepare(
-                "SELECT DISTINCT tracking_code FROM {$table} WHERE order_id = %d
-                 UNION
-                 SELECT DISTINCT tracking_code FROM {$meta_table} WHERE meta_key = 'order_id' AND meta_value = %s",
-                $order_id,
-                (string) $order_id
-            )
-        );
-        $codes = array_values( array_filter( array_unique( (array) $codes ) ) );
+        $codes = WCOTL_DB::get_tracking_codes_for_order( $order_id );
 
         // Check for Packlink PRO shipping data for this order
         $packlink_data = WCOTL_Packlink_Provider::get_order_packlink_data( $order_id );

@@ -50,6 +50,7 @@ class WCOTL_Refund_Column {
                 }
                 if ( ! empty( $order_ids ) ) {
                     WCOTL_DB::prime_delivered_at_cache( $order_ids );
+                    WCOTL_DB::prime_tracking_codes_cache( $order_ids );
                 }
             }
         }
@@ -81,6 +82,7 @@ class WCOTL_Refund_Column {
 
         if ( ! empty( $order_ids ) ) {
             WCOTL_DB::prime_delivered_at_cache( $order_ids );
+            WCOTL_DB::prime_tracking_codes_cache( $order_ids );
         }
 
         return $orders;

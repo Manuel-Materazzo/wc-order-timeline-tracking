@@ -215,6 +215,7 @@ class WCOTL_Admin {
             $code_to_delete = sanitize_text_field( wp_unslash( $_GET['tracking_code'] ) );
             $wpdb->delete( $table, [ 'tracking_code' => $code_to_delete ] );
             $wpdb->delete( $wpdb->prefix . 'order_timeline_meta', [ 'tracking_code' => $code_to_delete ] );
+            WCOTL_DB::clear_order_tracking_codes_cache();
             echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Code deleted.', 'wc-order-timeline' ) . '</p></div>';
         }
 
