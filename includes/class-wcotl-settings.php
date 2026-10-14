@@ -66,6 +66,14 @@ class WCOTL_Settings {
         register_setting( 'wcotl_settings_group', 'wcotl_turnstile_site_key',        'sanitize_text_field' );
         register_setting( 'wcotl_settings_group', 'wcotl_turnstile_secret_key',      'sanitize_text_field' );
         register_setting( 'wcotl_settings_group', 'wcotl_rate_limit_max_requests',   'absint' );
+        register_setting( 'wcotl_settings_group', 'wcotl_paccofacile_account_number', 'sanitize_text_field' );
+        register_setting( 'wcotl_settings_group', 'wcotl_paccofacile_api_key',        'sanitize_text_field' );
+        register_setting( 'wcotl_settings_group', 'wcotl_paccofacile_token',          'sanitize_text_field' );
+        register_setting( 'wcotl_settings_group', 'wcotl_paccofacile_environment',    'sanitize_key' );
+        register_setting( 'wcotl_settings_group', 'wcotl_default_package_weight',     'floatval' );
+        register_setting( 'wcotl_settings_group', 'wcotl_default_package_length',     'absint' );
+        register_setting( 'wcotl_settings_group', 'wcotl_default_package_width',      'absint' );
+        register_setting( 'wcotl_settings_group', 'wcotl_default_package_height',     'absint' );
     }
 
     /* ------------------------------------------------------------------
@@ -126,6 +134,38 @@ class WCOTL_Settings {
         if ( isset( $_POST['wcotl_rate_limit_max_requests'] ) ) {
             $rate_limit_max = max( 1, absint( $_POST['wcotl_rate_limit_max_requests'] ) );
             update_option( 'wcotl_rate_limit_max_requests', $rate_limit_max );
+        }
+        if ( isset( $_POST['wcotl_paccofacile_account_number'] ) ) {
+            $acc = sanitize_text_field( wp_unslash( $_POST['wcotl_paccofacile_account_number'] ) );
+            update_option( 'wcotl_paccofacile_account_number', $acc );
+        }
+        if ( isset( $_POST['wcotl_paccofacile_api_key'] ) ) {
+            $key = sanitize_text_field( wp_unslash( $_POST['wcotl_paccofacile_api_key'] ) );
+            update_option( 'wcotl_paccofacile_api_key', $key );
+        }
+        if ( isset( $_POST['wcotl_paccofacile_token'] ) ) {
+            $token = sanitize_text_field( wp_unslash( $_POST['wcotl_paccofacile_token'] ) );
+            update_option( 'wcotl_paccofacile_token', $token );
+        }
+        if ( isset( $_POST['wcotl_paccofacile_environment'] ) ) {
+            $pacco_env = sanitize_key( wp_unslash( $_POST['wcotl_paccofacile_environment'] ) );
+            update_option( 'wcotl_paccofacile_environment', $pacco_env === 'sandbox' ? 'sandbox' : 'live' );
+        }
+        if ( isset( $_POST['wcotl_default_package_weight'] ) ) {
+            $def_w = max( 0.01, floatval( wp_unslash( $_POST['wcotl_default_package_weight'] ) ) );
+            update_option( 'wcotl_default_package_weight', $def_w );
+        }
+        if ( isset( $_POST['wcotl_default_package_length'] ) ) {
+            $def_l = max( 1, absint( $_POST['wcotl_default_package_length'] ) );
+            update_option( 'wcotl_default_package_length', $def_l );
+        }
+        if ( isset( $_POST['wcotl_default_package_width'] ) ) {
+            $def_width = max( 1, absint( $_POST['wcotl_default_package_width'] ) );
+            update_option( 'wcotl_default_package_width', $def_width );
+        }
+        if ( isset( $_POST['wcotl_default_package_height'] ) ) {
+            $def_h = max( 1, absint( $_POST['wcotl_default_package_height'] ) );
+            update_option( 'wcotl_default_package_height', $def_h );
         }
 
         wp_redirect( admin_url( 'admin.php?page=wcotl-settings&saved=1' ) );
@@ -350,6 +390,19 @@ class WCOTL_Settings {
 
         // Check Packlink PRO plugin availability.
         $packlink_plugin_active = WCOTL_Packlink_Provider::is_packlink_plugin_active();
+
+        $paccofacile_acc        = get_option( 'wcotl_paccofacile_account_number', '' );
+        $paccofacile_key        = get_option( 'wcotl_paccofacile_api_key', '' );
+        $paccofacile_token      = get_option( 'wcotl_paccofacile_token', '' );
+        $paccofacile_env        = get_option( 'wcotl_paccofacile_environment', 'live' );
+        $paccofacile_prov       = new WCOTL_Paccofacile_Provider( $paccofacile_acc, $paccofacile_key, $paccofacile_token, $paccofacile_env );
+        $paccofacile_configured = $paccofacile_prov->is_configured();
+        $paccofacile_plugin     = WCOTL_Paccofacile_Provider::is_paccofacile_plugin_active();
+
+        $default_package_weight = (float) get_option( 'wcotl_default_package_weight', 1.0 );
+        $default_package_length = (int) get_option( 'wcotl_default_package_length', 20 );
+        $default_package_width  = (int) get_option( 'wcotl_default_package_width', 20 );
+        $default_package_height = (int) get_option( 'wcotl_default_package_height', 10 );
         ?>
 
         <div class="wrap wcotl-admin">
@@ -579,6 +632,96 @@ class WCOTL_Settings {
 
                     <button type="submit" class="button button-primary" style="margin-top:8px;">
                         Save FedEx Settings
+                    </button>
+                </form>
+            </div>
+
+            <!-- Paccofacile.it API (Rate Quoting & Comparison) -->
+            <div class="card" style="max-width:620px;margin-top:20px;">
+                <h2><span class="dashicons dashicons-money-alt"></span> Paccofacile.it API (Rate Comparison)</h2>
+                <p style="font-size:13px;color:#646970;margin-bottom:16px;">
+                    Connect your <a href="https://www.paccofacile.it" target="_blank">Paccofacile.it</a> PRO account to compare live courier shipping rates against Packlink PRO directly on the order screen.
+                    Find your API credentials under <strong>Paccofacile PRO &rarr; Integrazioni / API</strong>.
+                </p>
+
+                <?php if ( $paccofacile_plugin && empty( $paccofacile_acc ) && empty( $paccofacile_key ) && empty( $paccofacile_token ) ) : ?>
+                    <div style="background:#f0f6fc;border-left:4px solid #2271b1;padding:8px 12px;margin-bottom:12px;font-size:12px;color:#1d2327;">
+                        ℹ <strong>Paccofacile plugin detected:</strong> Credentials are automatically imported from your existing Paccofacile for WooCommerce settings when left blank below.
+                    </div>
+                <?php endif; ?>
+
+                <form method="POST" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
+                    <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
+                    <input type="hidden" name="action" value="wcotl_save_settings">
+
+                    <div class="wcotl-form-row">
+                        <label>
+                            Account Number
+                            <?php if ( $paccofacile_configured ) : ?>
+                                <span style="color:#008a20;font-size:11px;margin-left:6px;">✓ Configured</span>
+                            <?php endif; ?>
+                        </label>
+                        <input type="text" name="wcotl_paccofacile_account_number"
+                               value="<?php echo esc_attr( $paccofacile_acc ); ?>"
+                               placeholder="e.g. 12345"
+                               style="font-family:monospace;width:100%;">
+                    </div>
+
+                    <div class="wcotl-form-row">
+                        <label>API Key</label>
+                        <input type="text" name="wcotl_paccofacile_api_key"
+                               value="<?php echo esc_attr( $paccofacile_key ); ?>"
+                               placeholder="e.g. pf_live_xxxxxxxxxxxxxxxxxxxxxxxx"
+                               style="font-family:monospace;width:100%;">
+                    </div>
+
+                    <div class="wcotl-form-row">
+                        <label>Bearer Token</label>
+                        <div style="display:flex;gap:6px;">
+                            <input type="password" id="wcotl_paccofacile_token_field" name="wcotl_paccofacile_token"
+                                   value="<?php echo esc_attr( $paccofacile_token ); ?>"
+                                   placeholder="Paste your Paccofacile Bearer Token here"
+                                   style="font-family:monospace;flex:1;">
+                            <button type="button" class="button" onclick="var f = document.getElementById('wcotl_paccofacile_token_field'); f.type = f.type === 'password' ? 'text' : 'password'; this.textContent = f.type === 'password' ? 'Show' : 'Hide';">Show</button>
+                        </div>
+                    </div>
+
+                    <div class="wcotl-form-row">
+                        <label>Environment</label>
+                        <select name="wcotl_paccofacile_environment" style="width:240px;">
+                            <option value="live" <?php selected( $paccofacile_env, 'live' ); ?>>Production (Live)</option>
+                            <option value="sandbox" <?php selected( $paccofacile_env, 'sandbox' ); ?>>Sandbox (Testing)</option>
+                        </select>
+                    </div>
+
+                    <hr style="margin:16px 0;border:0;border-top:1px solid #dcdcde;">
+
+                    <h3 style="font-size:13px;margin:0 0 8px 0;"><?php esc_html_e( 'Default Package Fallback Dimensions', 'wc-order-timeline' ); ?></h3>
+                    <p style="font-size:12px;color:#646970;margin-bottom:12px;">
+                        Used to pre-fill the rate comparator when order items do not have custom weight or parcel dimensions configured.
+                    </p>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;">
+                        <div>
+                            <label style="font-size:11px;color:#50575e;display:block;margin-bottom:2px;">Weight (kg)</label>
+                            <input type="number" step="0.01" min="0.01" name="wcotl_default_package_weight" value="<?php echo esc_attr( $default_package_weight ); ?>" style="width:100%;">
+                        </div>
+                        <div>
+                            <label style="font-size:11px;color:#50575e;display:block;margin-bottom:2px;">Length (cm)</label>
+                            <input type="number" step="1" min="1" name="wcotl_default_package_length" value="<?php echo esc_attr( $default_package_length ); ?>" style="width:100%;">
+                        </div>
+                        <div>
+                            <label style="font-size:11px;color:#50575e;display:block;margin-bottom:2px;">Width (cm)</label>
+                            <input type="number" step="1" min="1" name="wcotl_default_package_width" value="<?php echo esc_attr( $default_package_width ); ?>" style="width:100%;">
+                        </div>
+                        <div>
+                            <label style="font-size:11px;color:#50575e;display:block;margin-bottom:2px;">Height (cm)</label>
+                            <input type="number" step="1" min="1" name="wcotl_default_package_height" value="<?php echo esc_attr( $default_package_height ); ?>" style="width:100%;">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="button button-primary" style="margin-top:14px;">
+                        Save Paccofacile &amp; Package Settings
                     </button>
                 </form>
             </div>

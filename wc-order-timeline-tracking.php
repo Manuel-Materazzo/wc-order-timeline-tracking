@@ -39,9 +39,11 @@ require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-tracking-provider.php';
 require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-17track-provider.php';
 require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-track123-provider.php';
 require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-packlink-provider.php';
+require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-paccofacile-provider.php';
 require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-fedex-provider.php';
 require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-auto-sync.php';
 require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-settings.php';
+require_once WCOTL_PLUGIN_DIR . 'includes/class-wcotl-rate-comparator.php';
 
 class WCOTL_Plugin {
     public static function init(): void {
@@ -55,6 +57,8 @@ class WCOTL_Plugin {
         // Auto-tracking
         WCOTL_Auto_Sync::init();
         WCOTL_Settings::init();
+        // Rate comparison
+        WCOTL_Rate_Comparator::init();
     }
 }
 

@@ -625,6 +625,140 @@ class WCOTL_Packlink_Provider extends WCOTL_Tracking_Provider {
     }
 
     /**
+     * Query shipping rates / available services from Packlink PRO.
+     *
+     * @param array $origin      [ 'country' => 'IT', 'postcode' => '00100' ]
+     * @param array $destination [ 'country' => 'IT', 'postcode' => '20100' ]
+     * @param array $parcels     List of [ 'weight' => 1.0, 'length' => 20, 'width' => 20, 'height' => 10 ]
+     * @return array Standardized rate results or error info.
+     */
+    public function get_rates( array $origin, array $destination, array $parcels ): array {
+        if ( empty( $this->api_key ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Packlink PRO API key is not configured.', 'wc-order-timeline' ),
+                'rates'   => [],
+            ];
+        }
+
+        $from_country = strtoupper( trim( $origin['country'] ?? 'IT' ) );
+        $from_zip     = trim( $origin['postcode'] ?? '' );
+        $to_country   = strtoupper( trim( $destination['country'] ?? 'IT' ) );
+        $to_zip       = trim( $destination['postcode'] ?? '' );
+
+        if ( empty( $from_zip ) || empty( $to_zip ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Origin and destination postal codes are required for Packlink rate quotes.', 'wc-order-timeline' ),
+                'rates'   => [],
+            ];
+        }
+
+        $query_params = [
+            'from' => [
+                'country' => $from_country,
+                'zip'     => $from_zip,
+            ],
+            'to' => [
+                'country' => $to_country,
+                'zip'     => $to_zip,
+            ],
+            'packages' => [],
+        ];
+
+        foreach ( $parcels as $i => $p ) {
+            $query_params['packages'][ (string) $i ] = [
+                'width'  => max( 1, (int) ( $p['width'] ?? 15 ) ),
+                'height' => max( 1, (int) ( $p['height'] ?? 10 ) ),
+                'length' => max( 1, (int) ( $p['length'] ?? 15 ) ),
+                'weight' => max( 0.1, (float) ( $p['weight'] ?? 1.0 ) ),
+            ];
+        }
+
+        if ( empty( $query_params['packages'] ) ) {
+            $query_params['packages']['0'] = [
+                'width'  => 20,
+                'height' => 10,
+                'length' => 20,
+                'weight' => 1.0,
+            ];
+        }
+
+        $query_string = http_build_query( $query_params );
+        $resp = $this->request( 'services?' . $query_string );
+
+        if ( is_wp_error( $resp ) ) {
+            return [
+                'success' => false,
+                'error'   => 'Packlink error: ' . $resp->get_error_message(),
+                'rates'   => [],
+            ];
+        }
+
+        $body = $resp['body'] ?? [];
+        if ( ! is_array( $body ) ) {
+            return [
+                'success' => false,
+                'error'   => 'Packlink returned invalid response.',
+                'rates'   => [],
+            ];
+        }
+
+        $rates = [];
+        foreach ( $body as $svc ) {
+            if ( ! is_array( $svc ) ) {
+                continue;
+            }
+
+            $carrier_name = trim( $svc['carrier_name'] ?? $svc['carrier'] ?? 'Packlink' );
+            $service_name = trim( $svc['service_name'] ?? $svc['name'] ?? '' );
+
+            // Price extraction
+            $price = 0.0;
+            if ( isset( $svc['price']['total_price'] ) ) {
+                $price = (float) $svc['price']['total_price'];
+            } elseif ( isset( $svc['price']['base_price'] ) ) {
+                $price = (float) $svc['price']['base_price'];
+            } elseif ( isset( $svc['price'] ) && is_numeric( $svc['price'] ) ) {
+                $price = (float) $svc['price'];
+            } elseif ( isset( $svc['total_price'] ) && is_numeric( $svc['total_price'] ) ) {
+                $price = (float) $svc['total_price'];
+            }
+
+            $currency = $svc['price']['currency'] ?? $svc['currency'] ?? 'EUR';
+
+            // Transit hours/days
+            $transit = '';
+            if ( ! empty( $svc['transit_hours'] ) ) {
+                $transit = $svc['transit_hours'] . 'h';
+            } elseif ( ! empty( $svc['transit_days'] ) ) {
+                $transit = $svc['transit_days'] . 'd';
+            } elseif ( ! empty( $svc['first_estimated_delivery_date'] ) ) {
+                $transit = 'Est. ' . substr( (string) $svc['first_estimated_delivery_date'], 0, 10 );
+            }
+
+            $rates[] = [
+                'provider'      => 'packlink',
+                'provider_name' => 'Packlink PRO',
+                'carrier'       => $carrier_name,
+                'service_name'  => $service_name,
+                'price'         => $price,
+                'currency'      => $currency,
+                'transit_time'  => $transit,
+                'pickup_date'   => $svc['first_estimated_delivery_date'] ?? '',
+                'service_id'    => (string) ( $svc['id'] ?? $svc['service_id'] ?? '' ),
+                'raw'           => $svc,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'rates'   => $rates,
+            'error'   => null,
+        ];
+    }
+
+    /**
      * Write a debug message to the WP error log when WP_DEBUG_LOG is active.
      */
     private function debug_log( string $message ): void {
@@ -634,3 +768,4 @@ class WCOTL_Packlink_Provider extends WCOTL_Tracking_Provider {
         }
     }
 }
+

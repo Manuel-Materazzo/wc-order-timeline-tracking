@@ -71,6 +71,21 @@ class WCOTL_Order_Metabox {
             </div>
         <?php endif; ?>
 
+        <!-- Shipping Rate Comparison (Packlink vs Paccofacile) -->
+        <div style="background:#f0f6fc;border:1px solid #c2dbf3;border-radius:4px;padding:10px;margin-bottom:12px;">
+            <div style="font-weight:600;font-size:12px;color:#1d2327;margin-bottom:6px;display:flex;align-items:center;gap:5px;">
+                <span class="dashicons dashicons-money-alt" style="font-size:16px;width:16px;height:16px;color:#2271b1;"></span>
+                <span><?php esc_html_e( 'Compare Shipping Rates', 'wc-order-timeline' ); ?></span>
+            </div>
+            <p style="font-size:11px;color:#50575e;margin:0 0 8px 0;line-height:1.4;">
+                <?php esc_html_e( 'Compare live courier prices between Packlink PRO and Paccofacile.it for this order.', 'wc-order-timeline' ); ?>
+            </p>
+            <button type="button" class="button button-small wcotl-open-rate-comparator" data-order-id="<?php echo esc_attr( $order_id ); ?>" style="width:100%;text-align:center;display:flex;align-items:center;justify-content:center;gap:4px;">
+                <span class="dashicons dashicons-search" style="font-size:13px;width:13px;height:13px;line-height:13px;"></span>
+                <?php esc_html_e( 'Compare Rates & Find Cheaper', 'wc-order-timeline' ); ?>
+            </button>
+        </div>
+
         <p style="font-size:12px;color:#888;margin-bottom:8px;">Tracking codes associated with this order:</p>
         <?php if ( empty( $codes ) ) : ?>
             <p style="font-size:13px;">None. <a href="<?php echo esc_url( admin_url( 'admin.php?page=wcotl-new-code&order_id=' . $order_id ) ); ?>">+ Create new code</a></p>

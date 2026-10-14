@@ -16,6 +16,7 @@
 * **Frontend Tracking Shortcode**: Display a sleek, modern, mobile-responsive tracking timeline to customers using `[wc_order_timeline_tracking]`.
 * **Refund Column Integration**: Adds timeline visibility directly inside WooCommerce admin order lists.
 * **Order List Quick Action**: One-click quick button in WooCommerce admin order lists (both classic CPT and HPOS) to jump straight to an order's tracking edit page.
+* **Shipping Rate Comparison (Packlink vs Paccofacile.it)**: One-click live price comparison between Packlink PRO and Paccofacile.it directly on the WooCommerce Order screen to find and select the cheapest shipping option.
 
 ---
 
@@ -26,8 +27,9 @@
 * **PHP**: 8.0 or higher
 * **17TRACK Account & API Key** *(Optional, for 17TRACK automated carrier tracking)*
 * **Track123 Account & API Key / Secret** *(Optional, for Track123 automated tracking)*
-* **Packlink PRO Account, API Key & the [Packlink PRO Shipping](https://wordpress.org/plugins/packlink-pro-shipping/) plugin** *(Optional, for Packlink automated tracking)*
+* **Packlink PRO Account, API Key & the [Packlink PRO Shipping](https://wordpress.org/plugins/packlink-pro-shipping/) plugin** *(Optional, for Packlink automated tracking & rate quotes)*
 * **FedEx Developer Account & Project API Credentials** *(Optional, for FedEx REST automated tracking)*
+* **Paccofacile.it PRO Account & API Credentials** *(Optional, for live Paccofacile rate quoting and price comparison)*
 
 ---
 
@@ -111,6 +113,26 @@ FedEx automated tracking connects directly to the [FedEx Track API](https://deve
 4. Save settings.
 5. On any tracking code detail screen, select **FedEx** as the provider and enter the real FedEx tracking number (e.g. `123456789012`).
 6. The background cron job handles OAuth token generation, automatic token expiration caching, detailed scan retrieval, and timeline step creation.
+
+---
+
+## ⚖️ Shipping Rate Comparison (Packlink PRO vs Paccofacile.it)
+
+When fulfilling WooCommerce orders, courier shipping costs can vary between Packlink PRO and Paccofacile.it. WC Order Timeline Tracking provides a live quote comparison directly on the order details screen:
+
+1. **Configuration**:
+   - In **Timeline Tracking > ⚙ Settings**, configure your **Packlink PRO API Key**.
+   - Under **Paccofacile.it API**, input your **Account Number**, **API Key**, and **Bearer Token** (or let it auto-detect from the official *Paccofacile for WooCommerce* plugin if active).
+   - Set fallback default package dimensions and weight.
+2. **Order Rate Comparison**:
+   - On any WooCommerce Order screen, locate the **Timeline Tracking** meta box in the sidebar.
+   - Click **"Compare Rates & Find Cheaper"**.
+   - An interactive modal will open with pre-filled sender origin (store address), customer delivery address, and parcel dimensions calculated from the order items.
+   - Adjust parcel count or dimensions if needed, then click **Get Quotes**.
+   - The plugin queries both Packlink PRO and Paccofacile.it in real time, sorting available couriers (BRT, UPS, GLS, Poste Italiane, InPost, etc.) by price and prominently displaying the cheapest option and your exact savings.
+   - Click **Book** to navigate directly to the chosen provider's dashboard to generate your waybill.
+
+---
 
 ### Provider Comparison
 
