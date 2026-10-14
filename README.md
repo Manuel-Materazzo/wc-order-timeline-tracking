@@ -89,8 +89,11 @@ Packlink PRO tracking is available **only when the [Packlink PRO Shipping for Wo
 2. Navigate to **Timeline Tracking > ⚙ Settings**.
 3. Input your **Packlink PRO API Key** (obtain it from your Packlink PRO dashboard under **Settings → Packlink PRO API**).
 4. Save settings.
-5. On each tracking code's detail page, select **Packlink PRO** as the provider and enter the Packlink **Shipment Reference** as the tracking reference.
-6. The same background cron job will auto-fetch updates from Packlink and add them as timeline steps.
+5. **Order Page & Auto-Import Prefill**:
+   - For any WooCommerce order shipped via Packlink PRO, the order sidebar meta box automatically detects the Packlink shipment: custom **Carrier name** (e.g. `brt - 2 DAYS`), **Carrier tracking codes** (e.g. Bartolini code), **Packlink Reference number**, and **Packlink shipping price**.
+   - Creating a store tracking code from the order keeps the standard `TRK-` store tracking code format for your customers while automatically prefilling the Packlink Reference number (or carrier code) in the Auto-Tracking section for instant imports.
+6. On each tracking code's detail page, select **Packlink PRO** as the provider and enter the Packlink **Shipment Reference** as the tracking reference (or click the one-click prefill button).
+7. The background cron job auto-fetches updates from Packlink and adds them as timeline steps.
 
 ---
 

@@ -644,6 +644,47 @@ class WCOTL_Admin {
                 <?php endif; ?>
             </div>
 
+            <?php
+            $packlink_order_data = $order_id ? WCOTL_Packlink_Provider::get_order_packlink_data( $order_id ) : null;
+            if ( $packlink_order_data ) :
+            ?>
+            <div style="background:#f0f6fc;border:1px solid #c8d7e1;border-left:4px solid #2271b1;padding:12px 14px;border-radius:4px;margin-bottom:16px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+                    <div>
+                        <div style="font-weight:600;font-size:13px;margin-bottom:4px;display:flex;align-items:center;gap:6px;color:#1d2327;">
+                            <span class="dashicons dashicons-cart"></span> Packlink PRO Shipment Detected (Order #<?php echo esc_html( $order_id ); ?>)
+                        </div>
+                        <div style="font-size:12px;color:#50575e;line-height:1.6;">
+                            <?php if ( ! empty( $packlink_order_data['carrier_name'] ) ) : ?>
+                                <span>Carrier: <strong><?php echo esc_html( $packlink_order_data['carrier_name'] ); ?></strong></span>
+                            <?php endif; ?>
+                            <?php if ( ! empty( $packlink_order_data['reference'] ) ) : ?>
+                                <span style="margin-left:8px;">Reference: <code style="background:#fff;padding:1px 5px;border-radius:3px;border:1px solid #ccd0d4;"><?php echo esc_html( $packlink_order_data['reference'] ); ?></code></span>
+                            <?php endif; ?>
+                            <?php if ( ! empty( $packlink_order_data['carrier_tracking_numbers'] ) ) : ?>
+                                <span style="margin-left:8px;">Carrier Code(s): <code style="background:#fff;padding:1px 5px;border-radius:3px;border:1px solid #ccd0d4;"><?php echo esc_html( implode( ', ', $packlink_order_data['carrier_tracking_numbers'] ) ); ?></code></span>
+                            <?php endif; ?>
+                            <?php if ( ! empty( $packlink_order_data['shipping_price'] ) && $packlink_order_data['shipping_price'] > 0 ) : ?>
+                                <span style="margin-left:8px;">Price: <strong><?php echo wc_price( $packlink_order_data['shipping_price'], [ 'currency' => $packlink_order_data['currency'] ?: 'EUR' ] ); ?></strong></span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                        <?php if ( ! empty( $packlink_order_data['reference'] ) ) : ?>
+                            <button type="button" class="button button-small" onclick="wcotlApplyPacklinkRef('<?php echo esc_js( $packlink_order_data['reference'] ); ?>')">
+                                Fill Reference
+                            </button>
+                        <?php endif; ?>
+                        <?php if ( ! empty( $packlink_order_data['carrier_tracking_numbers'] ) ) : ?>
+                            <button type="button" class="button button-small" onclick="wcotlApplyCarrierCode('<?php echo esc_js( $packlink_order_data['carrier_tracking_numbers'][0] ); ?>')">
+                                Fill Carrier Code
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <!-- Provider selector + tracking reference form -->
             <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
                 <?php if ( count( $available_providers ) > 1 ) : ?>
@@ -752,6 +793,29 @@ class WCOTL_Admin {
 
             <script>
             var WCOTL_TRACKING_CODE = '<?php echo esc_js($code); ?>';
+
+            function wcotlApplyPacklinkRef(ref) {
+                var sel = document.getElementById('wcotl-provider-select');
+                if (sel && sel.tagName === 'SELECT') {
+                    sel.value = 'packlink';
+                    if (typeof wcotlOnProviderChange === 'function') {
+                        wcotlOnProviderChange();
+                    }
+                }
+                var input = document.getElementById('wcotl-real-number');
+                if (input) {
+                    input.value = ref;
+                    input.focus();
+                }
+            }
+
+            function wcotlApplyCarrierCode(code) {
+                var input = document.getElementById('wcotl-real-number');
+                if (input) {
+                    input.value = code;
+                    input.focus();
+                }
+            }
 
             function wcotlGetProvider() {
                 var sel = document.getElementById('wcotl-provider-select');
@@ -1342,6 +1406,27 @@ class WCOTL_Admin {
                     // Always write a creation timestamp so the code exists in the meta table
                     // even before any steps are added (required for AJAX validation).
                     WCOTL_DB::set_meta( $code, 'created_at', current_time( 'mysql' ) );
+
+                    // Auto-tracking setup on creation if enabled
+                    $enable_auto_sync  = ! empty( $_POST['enable_auto_sync'] );
+                    $auto_provider     = sanitize_key( $_POST['auto_provider'] ?? 'packlink' );
+                    $auto_real_number  = sanitize_text_field( wp_unslash( $_POST['auto_real_number'] ?? '' ) );
+                    $auto_carrier_code = sanitize_text_field( wp_unslash( $_POST['auto_carrier_code'] ?? '' ) );
+
+                    if ( $enable_auto_sync && $auto_real_number !== '' ) {
+                        if ( ! in_array( $auto_provider, [ '17track', 'track123', 'packlink', 'fedex' ], true ) ) {
+                            $auto_provider = 'packlink';
+                        }
+                        WCOTL_DB::set_meta( $code, WCOTL_Auto_Sync::META_PROVIDER, $auto_provider );
+                        WCOTL_DB::set_meta( $code, WCOTL_Auto_Sync::META_REAL_NUMBER, $auto_real_number );
+                        if ( $auto_provider === 'track123' || $auto_provider === '17track' ) {
+                            WCOTL_DB::set_meta( $code, WCOTL_Auto_Sync::META_CARRIER_CODE, $auto_carrier_code );
+                        }
+
+                        // Trigger immediate initial sync
+                        WCOTL_Auto_Sync::sync_code( $code );
+                    }
+
                     wp_redirect( admin_url('admin.php?page=wcotl-tracking&view=' . urlencode($code) ) );
                     exit;
                 }
@@ -1350,33 +1435,217 @@ class WCOTL_Admin {
             }
         }
 
-        $suggested  = 'TRK-' . date('Ymd') . '-' . strtoupper( wp_generate_password(4, false, false) );
-        $order_id   = absint( $_GET['order_id'] ?? 0 );
+        $order_id            = absint( $_GET['order_id'] ?? 0 );
+        $packlink_data       = $order_id ? WCOTL_Packlink_Provider::get_order_packlink_data( $order_id ) : null;
+        $suggested           = 'TRK-' . date('Ymd') . '-' . strtoupper( wp_generate_password(4, false, false) );
+
+        // Available auto-tracking providers
+        $has_17track        = (bool) get_option( 'wcotl_17track_api_key', '' );
+        $has_track123       = (bool) get_option( 'wcotl_track123_api_key', '' );
+        $has_packlink       = WCOTL_Packlink_Provider::is_packlink_plugin_active() && (bool) get_option( 'wcotl_packlink_api_key', '' );
+        $has_fedex          = (bool) ( get_option( 'wcotl_fedex_client_id', '' ) && get_option( 'wcotl_fedex_client_secret', '' ) );
+        $any_provider       = $has_17track || $has_track123 || $has_packlink || $has_fedex;
+
+        $available_providers = [];
+        if ( $has_packlink ) {
+            $available_providers['packlink'] = 'Packlink PRO';
+        }
+        if ( $has_track123 ) {
+            $available_providers['track123'] = 'Track123';
+        }
+        if ( $has_17track ) {
+            $available_providers['17track'] = '17TRACK';
+        }
+        if ( $has_fedex ) {
+            $available_providers['fedex'] = 'FedEx';
+        }
+
+        // Default auto-tracking reference for imports
+        $default_auto_ref = '';
+        if ( ! empty( $_GET['auto_ref'] ) ) {
+            $default_auto_ref = sanitize_text_field( wp_unslash( $_GET['auto_ref'] ) );
+        } elseif ( $packlink_data && ! empty( $packlink_data['reference'] ) ) {
+            $default_auto_ref = $packlink_data['reference'];
+        } elseif ( $packlink_data && ! empty( $packlink_data['carrier_tracking_numbers'] ) ) {
+            $default_auto_ref = $packlink_data['carrier_tracking_numbers'][0];
+        }
+
+        $default_auto_provider = ! empty( $_GET['auto_provider'] ) ? sanitize_key( $_GET['auto_provider'] ) : ( $has_packlink ? 'packlink' : ( array_key_first( $available_providers ) ?: 'packlink' ) );
         ?>
         <div class="wrap wcotl-admin">
             <h1>New Tracking Code</h1>
             <?php echo wp_kses_post( $notice ); ?>
-            <div class="card" style="max-width:480px;">
+
+            <?php if ( $packlink_data ) : ?>
+                <div class="card" style="max-width:580px;margin-bottom:20px;border-left:4px solid #2271b1;background:#f8f9fa;">
+                    <h3 style="margin-top:0;display:flex;align-items:center;gap:6px;font-size:14px;color:#1d2327;">
+                        <span class="dashicons dashicons-cart"></span> Packlink PRO Shipment Detected (Order #<?php echo esc_html( $order_id ); ?>)
+                    </h3>
+                    <table class="widefat striped" style="background:#fff;margin-bottom:8px;">
+                        <tbody>
+                            <?php if ( ! empty( $packlink_data['carrier_name'] ) ) : ?>
+                                <tr>
+                                    <td style="width:160px;font-weight:600;">Carrier:</td>
+                                    <td><strong><?php echo esc_html( $packlink_data['carrier_name'] ); ?></strong></td>
+                                </tr>
+                            <?php endif; ?>
+                            <?php if ( ! empty( $packlink_data['reference'] ) ) : ?>
+                                <tr>
+                                    <td style="font-weight:600;">Reference number:</td>
+                                    <td><code style="font-size:12px;background:#eef;padding:2px 6px;border-radius:3px;"><?php echo esc_html( $packlink_data['reference'] ); ?></code></td>
+                                </tr>
+                            <?php endif; ?>
+                            <?php if ( ! empty( $packlink_data['carrier_tracking_numbers'] ) ) : ?>
+                                <tr>
+                                    <td style="font-weight:600;">Carrier tracking codes:</td>
+                                    <td>
+                                        <?php foreach ( $packlink_data['carrier_tracking_numbers'] as $ctn ) : ?>
+                                            <code style="font-size:12px;background:#efe;padding:2px 6px;border-radius:3px;margin-right:4px;"><?php echo esc_html( $ctn ); ?></code>
+                                        <?php endforeach; ?>
+                                    </td>
+                                </tr>
+                            <?php endif; ?>
+                            <?php if ( ! empty( $packlink_data['shipping_price'] ) && $packlink_data['shipping_price'] > 0 ) : ?>
+                                <tr>
+                                    <td style="font-weight:600;">Packlink price:</td>
+                                    <td><strong><?php echo wc_price( $packlink_data['shipping_price'], [ 'currency' => $packlink_data['currency'] ?: 'EUR' ] ); ?></strong></td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                    <p style="font-size:11px;color:#646970;margin:0;">These tracking codes have been prefilled into the Auto-Tracking section below for automatic sync.</p>
+                </div>
+            <?php endif; ?>
+
+            <div class="card" style="max-width:580px;">
                 <h2>Create a new code</h2>
-                <p style="font-size:13px;color:#646970;margin-bottom:16px;">This code will be shared with the customer. Any format is allowed.</p>
+                <p style="font-size:13px;color:#646970;margin-bottom:16px;">This code will be shared with the customer to track their delivery on your store.</p>
                 <form method="POST">
                     <?php wp_nonce_field('wcotl_create_code'); ?>
                     <input type="hidden" name="wcotl_create_code" value="1">
                     <?php if ( $order_id ) : ?>
                         <input type="hidden" name="order_id" value="<?php echo esc_attr( $order_id ); ?>">
                     <?php endif; ?>
+
                     <div class="wcotl-form-row">
-                        <label for="tracking_code">Tracking code</label>
+                        <label for="tracking_code">Store tracking code <span style="color:#d63638;">*</span></label>
                         <input type="text" id="tracking_code" name="tracking_code" value="<?php echo esc_attr($suggested); ?>"
-                               placeholder="e.g. TRK-20240518-001" required style="font-family:monospace;">
+                               placeholder="e.g. TRK-20240518-001" required style="font-family:monospace;font-size:14px;">
                     </div>
+
                     <?php if ( $order_id ) : ?>
                         <p style="font-size:12px;color:#008a20;margin-bottom:16px;">✓ Will be automatically associated with order <strong>#<?php echo esc_html( $order_id ); ?></strong>.</p>
                     <?php endif; ?>
-                    <button type="submit" class="button button-primary" style="width:100%;">Create & start adding steps</button>
+
+                    <!-- Auto-Tracking Integration Section -->
+                    <div style="background:#f9f9f9;border:1px solid #e5e5e5;padding:12px 14px;border-radius:4px;margin-bottom:18px;">
+                        <label style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;cursor:pointer;">
+                            <input type="checkbox" id="enable_auto_sync" name="enable_auto_sync" value="1" <?php checked( $any_provider && (bool) $default_auto_ref ); ?> onchange="wcotlToggleAutoSyncBox()">
+                            <span><span class="dashicons dashicons-share-alt" style="font-size:16px;width:16px;height:16px;vertical-align:text-bottom;"></span> Automatically sync tracking updates (Auto-Tracking)</span>
+                        </label>
+
+                        <div id="wcotl-auto-sync-fields" style="<?php echo ( $any_provider && (bool) $default_auto_ref ) ? '' : 'display:none;'; ?>margin-top:12px;">
+                            <?php if ( ! empty( $available_providers ) ) : ?>
+                                <div class="wcotl-form-row">
+                                    <label for="auto_provider">Provider</label>
+                                    <select id="auto_provider" name="auto_provider" onchange="wcotlToggleNewCodeProvider()" style="width:100%;">
+                                        <?php foreach ( $available_providers as $p_slug => $p_name ) : ?>
+                                            <option value="<?php echo esc_attr( $p_slug ); ?>" <?php selected( $default_auto_provider, $p_slug ); ?>><?php echo esc_html( $p_name ); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            <?php else : ?>
+                                <input type="hidden" id="auto_provider" name="auto_provider" value="packlink">
+                            <?php endif; ?>
+
+                            <div class="wcotl-form-row">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                                    <label for="auto_real_number" id="wcotl-new-ref-label" style="margin-bottom:0;">
+                                        <?php echo ( $default_auto_provider === 'packlink' ) ? 'Packlink Shipment Reference' : 'Tracking Reference / Number'; ?>
+                                    </label>
+                                    <?php if ( $packlink_data ) : ?>
+                                        <div style="font-size:11px;">
+                                            <?php if ( ! empty( $packlink_data['reference'] ) ) : ?>
+                                                <a href="javascript:void(0)" onclick="wcotlSetAutoRef('<?php echo esc_js( $packlink_data['reference'] ); ?>', 'packlink')">
+                                                    Use Packlink Ref
+                                                </a>
+                                            <?php endif; ?>
+                                            <?php if ( ! empty( $packlink_data['reference'] ) && ! empty( $packlink_data['carrier_tracking_numbers'] ) ) : ?>
+                                                &bull;
+                                            <?php endif; ?>
+                                            <?php if ( ! empty( $packlink_data['carrier_tracking_numbers'] ) ) : ?>
+                                                <a href="javascript:void(0)" onclick="wcotlSetAutoRef('<?php echo esc_js( $packlink_data['carrier_tracking_numbers'][0] ); ?>', '<?php echo esc_js( $has_track123 ? 'track123' : '17track' ); ?>')">
+                                                    Use Carrier Code
+                                                </a>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                                <input type="text" id="auto_real_number" name="auto_real_number" value="<?php echo esc_attr( $default_auto_ref ); ?>"
+                                       placeholder="e.g. ES202410141234" style="font-family:monospace;width:100%;">
+                            </div>
+
+                            <div id="wcotl-new-carrier-row" class="wcotl-form-row" style="<?php echo ( $default_auto_provider === 'packlink' || $default_auto_provider === 'fedex' ) ? 'display:none;' : ''; ?>">
+                                <label for="auto_carrier_code">Carrier Code (leave empty for auto-detect)</label>
+                                <input type="text" id="auto_carrier_code" name="auto_carrier_code" value="" placeholder="e.g. bartolini or courier code" style="width:100%;">
+                            </div>
+                            <p style="font-size:11px;color:#646970;margin:0;">The plugin will immediately query tracking events upon code creation and continue periodic sync via cron.</p>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="button button-primary button-large" style="width:100%;height:38px;">Create & start adding steps</button>
                 </form>
             </div>
         </div>
+
+        <script>
+        function wcotlSetAutoRef(code, provider) {
+            var chk = document.getElementById('enable_auto_sync');
+            if (chk && !chk.checked) {
+                chk.checked = true;
+                wcotlToggleAutoSyncBox();
+            }
+            if (provider) {
+                var pSelect = document.getElementById('auto_provider');
+                if (pSelect) {
+                    pSelect.value = provider;
+                    wcotlToggleNewCodeProvider();
+                }
+            }
+            var input = document.getElementById('auto_real_number');
+            if (input) {
+                input.value = code;
+                input.focus();
+            }
+        }
+
+        function wcotlToggleNewCodeProvider() {
+            var pSelect = document.getElementById('auto_provider');
+            var val = pSelect ? pSelect.value : 'packlink';
+            var carrierRow = document.getElementById('wcotl-new-carrier-row');
+            var label = document.getElementById('wcotl-new-ref-label');
+            if (carrierRow) {
+                carrierRow.style.display = (val === 'packlink' || val === 'fedex') ? 'none' : 'block';
+            }
+            if (label) {
+                if (val === 'packlink') {
+                    label.textContent = 'Packlink Shipment Reference';
+                } else if (val === 'fedex') {
+                    label.textContent = 'FedEx Tracking Number';
+                } else {
+                    label.textContent = 'Carrier Tracking Number';
+                }
+            }
+        }
+
+        function wcotlToggleAutoSyncBox() {
+            var chk = document.getElementById('enable_auto_sync');
+            var box = document.getElementById('wcotl-auto-sync-fields');
+            if (box) {
+                box.style.display = (chk && chk.checked) ? 'block' : 'none';
+            }
+        }
+        </script>
         <?php
     }
 
