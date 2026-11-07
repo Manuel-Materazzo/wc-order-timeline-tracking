@@ -42,6 +42,61 @@ class WCOTL_Rate_Comparator {
     }
 
     /**
+     * Normalize and resolve Italian province codes (2-letter uppercase).
+     */
+    public static function normalize_province( string $state, string $country = 'IT', string $city = '', string $postcode = '' ): string {
+        $country = strtoupper( trim( $country ) );
+        $state   = strtoupper( trim( $state ) );
+
+        if ( $country !== 'IT' ) {
+            return $state;
+        }
+
+        // Already a valid 2-letter Italian province code
+        if ( preg_match( '/^[A-Z]{2}$/', $state ) ) {
+            return $state;
+        }
+
+        // Lookup via WooCommerce states list
+        if ( function_exists( 'WC' ) && WC()->countries ) {
+            $states = WC()->countries->get_states( 'IT' );
+            if ( is_array( $states ) ) {
+                foreach ( $states as $code => $name ) {
+                    if ( strcasecmp( $name, $state ) === 0 || ( ! empty( $city ) && strcasecmp( $name, $city ) === 0 ) ) {
+                        return strtoupper( $code );
+                    }
+                }
+            }
+        }
+
+        // Fallback map for common Italian provincial capitals
+        $city_clean = strtoupper( trim( $city ) );
+        $city_map   = [
+            'ROMA' => 'RM', 'MILANO' => 'MI', 'NAPOLI' => 'NA', 'TORINO' => 'TO',
+            'PALERMO' => 'PA', 'GENOVA' => 'GE', 'BOLOGNA' => 'BO', 'FIRENZE' => 'FI',
+            'BARI' => 'BA', 'CATANIA' => 'CT', 'VERONA' => 'VR', 'VENEZIA' => 'VE',
+            'MESSINA' => 'ME', 'PADOVA' => 'PD', 'TRIESTE' => 'TS', 'BRESCIA' => 'BS',
+            'TARANTO' => 'TA', 'PARMA' => 'PR', 'PRATO' => 'PO', 'MODENA' => 'MO',
+            'REGGIO CALABRIA' => 'RC', 'REGGIO EMILIA' => 'RE', 'PERUGIA' => 'PG',
+            'LIVORNO' => 'LI', 'RAVENNA' => 'RA', 'CAGLIARI' => 'CA', 'FOGGIA' => 'FG',
+            'RIMINI' => 'RN', 'SALERNO' => 'SA', 'FERRARA' => 'FE', 'SASSARI' => 'SS',
+            'LATINA' => 'LT', 'MONZA' => 'MB', 'BERGAMO' => 'BG', 'PESCARA' => 'PE',
+            'TRENTO' => 'TN', 'VICENZA' => 'VI', 'TERNI' => 'TR', 'BOLZANO' => 'BZ',
+            'NOVARA' => 'NO', 'PIACENZA' => 'PC', 'ANCONA' => 'AN', 'AREZZO' => 'AR',
+            'UDINE' => 'UD', 'CESENA' => 'FC', 'LECCE' => 'LE', 'PESARO' => 'PU',
+            'ALESSANDRIA' => 'AL', 'LA SPEZIA' => 'SP', 'PISA' => 'PI', 'PISTOIA' => 'PT',
+            'LUCCA' => 'LU', 'COMO' => 'CO', 'TREVISO' => 'TV', 'BRINDISI' => 'BR',
+            'GROSSETO' => 'GR', 'VARESE' => 'VA', 'ASTI' => 'AT', 'CASERTA' => 'CE',
+            'RAGUSA' => 'RG', 'PAVIA' => 'PV', 'CREMONA' => 'CR', 'COSENZA' => 'CS',
+        ];
+        if ( isset( $city_map[ $city_clean ] ) ) {
+            return $city_map[ $city_clean ];
+        }
+
+        return substr( $state, 0, 2 );
+    }
+
+    /**
      * Extract pre-filled origin, destination, and package estimates for a WooCommerce order.
      */
     public static function get_order_shipping_details( int $order_id ): ?array {
@@ -51,19 +106,37 @@ class WCOTL_Rate_Comparator {
         }
 
         // Store origin address (WooCommerce settings)
+        $orig_country  = WC()->countries->get_base_country() ?: 'IT';
+        $orig_state    = WC()->countries->get_base_state() ?: '';
+        $orig_city     = WC()->countries->get_base_city() ?: '';
+        $orig_postcode = WC()->countries->get_base_postcode() ?: '';
+
+        if ( str_contains( $orig_country, ':' ) ) {
+            $parts        = explode( ':', $orig_country );
+            $orig_country = $parts[0];
+            $orig_state   = $parts[1] ?? $orig_state;
+        }
+        $orig_state = self::normalize_province( $orig_state, $orig_country, $orig_city, $orig_postcode );
+
         $origin = [
-            'country'  => WC()->countries->get_base_country() ?: 'IT',
-            'postcode' => WC()->countries->get_base_postcode() ?: '',
-            'city'     => WC()->countries->get_base_city() ?: '',
-            'state'    => WC()->countries->get_base_state() ?: '',
+            'country'  => $orig_country,
+            'postcode' => $orig_postcode,
+            'city'     => $orig_city,
+            'state'    => $orig_state,
         ];
 
         // Customer destination address (order shipping with billing fallback)
+        $dest_country  = $order->get_shipping_country() ?: ( $order->get_billing_country() ?: 'IT' );
+        $dest_postcode = $order->get_shipping_postcode() ?: ( $order->get_billing_postcode() ?: '' );
+        $dest_city     = $order->get_shipping_city() ?: ( $order->get_billing_city() ?: '' );
+        $dest_state    = $order->get_shipping_state() ?: ( $order->get_billing_state() ?: '' );
+        $dest_state    = self::normalize_province( $dest_state, $dest_country, $dest_city, $dest_postcode );
+
         $destination = [
-            'country'  => $order->get_shipping_country() ?: ( $order->get_billing_country() ?: 'IT' ),
-            'postcode' => $order->get_shipping_postcode() ?: ( $order->get_billing_postcode() ?: '' ),
-            'city'     => $order->get_shipping_city() ?: ( $order->get_billing_city() ?: '' ),
-            'state'    => $order->get_shipping_state() ?: ( $order->get_billing_state() ?: '' ),
+            'country'  => $dest_country,
+            'postcode' => $dest_postcode,
+            'city'     => $dest_city,
+            'state'    => $dest_state,
         ];
 
         // Calculate package weights & dimensions
@@ -132,8 +205,8 @@ class WCOTL_Rate_Comparator {
             if ( $res['success'] && ! empty( $res['rates'] ) ) {
                 $packlink_rates = $res['rates'];
                 $all_rates      = array_merge( $all_rates, $packlink_rates );
-            } elseif ( ! empty( $res['error'] ) ) {
-                $errors['packlink'] = $res['error'];
+            } else {
+                $errors['packlink'] = ! empty( $res['error'] ) ? $res['error'] : __( 'Packlink PRO returned 0 available quotes for this shipment.', 'wc-order-timeline' );
             }
         } else {
             $errors['packlink'] = __( 'Packlink PRO is not configured or plugin is inactive.', 'wc-order-timeline' );
@@ -145,8 +218,8 @@ class WCOTL_Rate_Comparator {
             if ( $res['success'] && ! empty( $res['rates'] ) ) {
                 $paccofacile_rates = $res['rates'];
                 $all_rates         = array_merge( $all_rates, $paccofacile_rates );
-            } elseif ( ! empty( $res['error'] ) ) {
-                $errors['paccofacile'] = $res['error'];
+            } else {
+                $errors['paccofacile'] = ! empty( $res['error'] ) ? $res['error'] : __( 'Paccofacile returned 0 available quotes for this shipment.', 'wc-order-timeline' );
             }
         } else {
             $errors['paccofacile'] = __( 'Paccofacile credentials (Account Number, API Key, Token) are not configured.', 'wc-order-timeline' );
@@ -182,19 +255,21 @@ class WCOTL_Rate_Comparator {
 
             if ( $cheapest_paccofacile['price'] < $cheapest_packlink['price'] ) {
                 $comparison['winner']          = 'paccofacile';
+                $carrier_display               = $cheapest_paccofacile['carrier'] . ( ! empty( $cheapest_paccofacile['service_name'] ) ? ' (' . $cheapest_paccofacile['service_name'] . ')' : '' );
                 $comparison['summary_message'] = sprintf(
                     /* translators: 1: Carrier name, 2: price, 3: saved amount */
                     __( 'Paccofacile is cheaper! %1$s is %2$s — saving %3$s compared to Packlink.', 'wc-order-timeline' ),
-                    $cheapest_paccofacile['carrier'] . ' (' . $cheapest_paccofacile['service_name'] . ')',
+                    '<strong>' . esc_html( $carrier_display ) . '</strong>',
                     wc_price( $cheapest_paccofacile['price'] ),
                     wc_price( $diff )
                 );
             } elseif ( $cheapest_packlink['price'] < $cheapest_paccofacile['price'] ) {
                 $comparison['winner']          = 'packlink';
+                $carrier_display               = $cheapest_packlink['carrier'] . ( ! empty( $cheapest_packlink['service_name'] ) ? ' (' . $cheapest_packlink['service_name'] . ')' : '' );
                 $comparison['summary_message'] = sprintf(
                     /* translators: 1: Carrier name, 2: price, 3: saved amount */
                     __( 'Packlink is cheaper! %1$s is %2$s — saving %3$s compared to Paccofacile.', 'wc-order-timeline' ),
-                    $cheapest_packlink['carrier'] . ' (' . $cheapest_packlink['service_name'] . ')',
+                    '<strong>' . esc_html( $carrier_display ) . '</strong>',
                     wc_price( $cheapest_packlink['price'] ),
                     wc_price( $diff )
                 );
@@ -204,13 +279,16 @@ class WCOTL_Rate_Comparator {
             }
         } elseif ( $cheapest_overall ) {
             $comparison['winner']          = $cheapest_overall['provider'];
+            $option_display                = $cheapest_overall['provider_name'] . ' - ' . $cheapest_overall['carrier'];
             $comparison['summary_message'] = sprintf(
-                /* translators: 1: provider name, 2: price */
+                /* translators: 1: provider and carrier name, 2: price */
                 __( 'Best available option: %1$s at %2$s.', 'wc-order-timeline' ),
-                $cheapest_overall['provider_name'] . ' - ' . $cheapest_overall['carrier'],
+                '<strong>' . esc_html( $option_display ) . '</strong>',
                 wc_price( $cheapest_overall['price'] )
             );
         }
+
+        $comparison['summary_message_text'] = wp_strip_all_tags( $comparison['summary_message'] );
 
         return [
             'success'              => ! empty( $all_rates ),
@@ -256,18 +334,28 @@ class WCOTL_Rate_Comparator {
             wp_send_json_error( 'Not authorized.' );
         }
 
+        $orig_c        = sanitize_text_field( wp_unslash( $_POST['origin_country'] ?? 'IT' ) );
+        $orig_city     = sanitize_text_field( wp_unslash( $_POST['origin_city'] ?? '' ) );
+        $orig_postcode = sanitize_text_field( wp_unslash( $_POST['origin_postcode'] ?? '' ) );
+        $orig_state    = self::normalize_province( sanitize_text_field( wp_unslash( $_POST['origin_state'] ?? '' ) ), $orig_c, $orig_city, $orig_postcode );
+
         $origin = [
-            'country'  => sanitize_text_field( wp_unslash( $_POST['origin_country'] ?? 'IT' ) ),
-            'postcode' => sanitize_text_field( wp_unslash( $_POST['origin_postcode'] ?? '' ) ),
-            'city'     => sanitize_text_field( wp_unslash( $_POST['origin_city'] ?? '' ) ),
-            'state'    => sanitize_text_field( wp_unslash( $_POST['origin_state'] ?? '' ) ),
+            'country'  => $orig_c,
+            'postcode' => $orig_postcode,
+            'city'     => $orig_city,
+            'state'    => $orig_state,
         ];
 
+        $dest_c        = sanitize_text_field( wp_unslash( $_POST['dest_country'] ?? 'IT' ) );
+        $dest_city     = sanitize_text_field( wp_unslash( $_POST['dest_city'] ?? '' ) );
+        $dest_postcode = sanitize_text_field( wp_unslash( $_POST['dest_postcode'] ?? '' ) );
+        $dest_state    = self::normalize_province( sanitize_text_field( wp_unslash( $_POST['dest_state'] ?? '' ) ), $dest_c, $dest_city, $dest_postcode );
+
         $destination = [
-            'country'  => sanitize_text_field( wp_unslash( $_POST['dest_country'] ?? 'IT' ) ),
-            'postcode' => sanitize_text_field( wp_unslash( $_POST['dest_postcode'] ?? '' ) ),
-            'city'     => sanitize_text_field( wp_unslash( $_POST['dest_city'] ?? '' ) ),
-            'state'    => sanitize_text_field( wp_unslash( $_POST['dest_state'] ?? '' ) ),
+            'country'  => $dest_c,
+            'postcode' => $dest_postcode,
+            'city'     => $dest_city,
+            'state'    => $dest_state,
         ];
 
         $raw_parcels = $_POST['parcels'] ?? [];
@@ -364,7 +452,7 @@ class WCOTL_Rate_Comparator {
                                 <span class="dashicons dashicons-store" style="font-size:15px;width:15px;height:15px;"></span>
                                 <?php esc_html_e( 'Store Origin (Pickup)', 'wc-order-timeline' ); ?>
                             </div>
-                            <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;">
+                            <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px;">
                                 <div>
                                     <label style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'City', 'wc-order-timeline' ); ?></label>
                                     <input type="text" id="wcotl-rate-orig-city" style="width:100%;font-size:12px;padding:3px 6px;">
@@ -374,11 +462,14 @@ class WCOTL_Rate_Comparator {
                                     <input type="text" id="wcotl-rate-orig-postcode" style="width:100%;font-size:12px;padding:3px 6px;">
                                 </div>
                                 <div>
+                                    <label style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'Prov', 'wc-order-timeline' ); ?></label>
+                                    <input type="text" id="wcotl-rate-orig-state" style="width:100%;font-size:12px;padding:3px 6px;" maxlength="4" placeholder="RM">
+                                </div>
+                                <div>
                                     <label style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'Country', 'wc-order-timeline' ); ?></label>
-                                    <input type="text" id="wcotl-rate-orig-country" style="width:100%;font-size:12px;padding:3px 6px;" maxlength="2">
+                                    <input type="text" id="wcotl-rate-orig-country" style="width:100%;font-size:12px;padding:3px 6px;" maxlength="2" placeholder="IT">
                                 </div>
                             </div>
-                            <input type="hidden" id="wcotl-rate-orig-state" value="">
                         </div>
 
                         <!-- Destination Card -->
@@ -387,7 +478,7 @@ class WCOTL_Rate_Comparator {
                                 <span class="dashicons dashicons-location" style="font-size:15px;width:15px;height:15px;"></span>
                                 <?php esc_html_e( 'Recipient Destination', 'wc-order-timeline' ); ?>
                             </div>
-                            <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;">
+                            <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px;">
                                 <div>
                                     <label style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'City', 'wc-order-timeline' ); ?></label>
                                     <input type="text" id="wcotl-rate-dest-city" style="width:100%;font-size:12px;padding:3px 6px;">
@@ -397,11 +488,14 @@ class WCOTL_Rate_Comparator {
                                     <input type="text" id="wcotl-rate-dest-postcode" style="width:100%;font-size:12px;padding:3px 6px;">
                                 </div>
                                 <div>
+                                    <label style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'Prov', 'wc-order-timeline' ); ?></label>
+                                    <input type="text" id="wcotl-rate-dest-state" style="width:100%;font-size:12px;padding:3px 6px;" maxlength="4" placeholder="MI">
+                                </div>
+                                <div>
                                     <label style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'Country', 'wc-order-timeline' ); ?></label>
-                                    <input type="text" id="wcotl-rate-dest-country" style="width:100%;font-size:12px;padding:3px 6px;" maxlength="2">
+                                    <input type="text" id="wcotl-rate-dest-country" style="width:100%;font-size:12px;padding:3px 6px;" maxlength="2" placeholder="IT">
                                 </div>
                             </div>
-                            <input type="hidden" id="wcotl-rate-dest-state" value="">
                         </div>
                     </div>
 
@@ -498,6 +592,7 @@ class WCOTL_Rate_Comparator {
         (function($) {
             let currentOrderId = 0;
             let currentRates = [];
+            let currentErrors = {};
             let activeTab = 'all';
 
             // Open Modal
@@ -672,15 +767,16 @@ class WCOTL_Rate_Comparator {
 
             function renderQuotes(data) {
                 currentRates = data.all_rates || [];
+                currentErrors = data.errors || {};
 
                 // Winner banner
                 if (data.comparison && data.comparison.summary_message && data.cheapest_overall) {
                     var win = data.comparison;
-                    $('#wcotl-winner-title').text(win.summary_message);
+                    $('#wcotl-winner-title').html(win.summary_message);
                     
                     var details = '';
                     if (data.cheapest_packlink && data.cheapest_paccofacile) {
-                        details = 'Packlink cheapest: <strong>€' + parseFloat(data.cheapest_packlink.price).toFixed(2) + '</strong> (' + data.cheapest_packlink.carrier + ') vs Paccofacile cheapest: <strong>€' + parseFloat(data.cheapest_paccofacile.price).toFixed(2) + '</strong> (' + data.cheapest_paccofacile.carrier + ')';
+                        details = 'Packlink cheapest: <strong>€' + parseFloat(data.cheapest_packlink.price).toFixed(2) + '</strong> (' + escapeHtml(data.cheapest_packlink.carrier) + ') vs Paccofacile cheapest: <strong>€' + parseFloat(data.cheapest_paccofacile.price).toFixed(2) + '</strong> (' + escapeHtml(data.cheapest_paccofacile.carrier) + ')';
                     }
                     $('#wcotl-winner-details').html(details);
 
@@ -723,7 +819,13 @@ class WCOTL_Rate_Comparator {
                 });
 
                 if (filtered.length === 0) {
-                    tbody.html('<tr><td colspan="5" style="text-align:center;color:#646970;padding:24px;">No shipping options found for this provider.</td></tr>');
+                    var providerNotice = '';
+                    if (activeTab === 'paccofacile' && currentErrors && currentErrors.paccofacile) {
+                        providerNotice = '<div style="margin-top:8px;color:#b32d2e;font-size:12px;background:#fcf0f1;padding:8px 12px;border-radius:4px;display:inline-block;border:1px solid #f1aeb5;"><strong>Paccofacile Notice:</strong> ' + escapeHtml(currentErrors.paccofacile) + '</div>';
+                    } else if (activeTab === 'packlink' && currentErrors && currentErrors.packlink) {
+                        providerNotice = '<div style="margin-top:8px;color:#b32d2e;font-size:12px;background:#fcf0f1;padding:8px 12px;border-radius:4px;display:inline-block;border:1px solid #f1aeb5;"><strong>Packlink Notice:</strong> ' + escapeHtml(currentErrors.packlink) + '</div>';
+                    }
+                    tbody.html('<tr><td colspan="5" style="text-align:center;color:#646970;padding:24px;">No shipping options found for this provider.' + providerNotice + '</td></tr>');
                     return;
                 }
 
