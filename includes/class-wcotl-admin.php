@@ -498,6 +498,14 @@ class WCOTL_Admin {
             $available_providers['fedex'] = 'FedEx';
         }
 
+        $provider_quotas = [];
+        foreach ( $available_providers as $p_slug => $p_name ) {
+            $p_inst = WCOTL_Auto_Sync::get_provider_by_slug( $p_slug );
+            if ( $p_inst ) {
+                $provider_quotas[ $p_slug ] = $p_inst->get_quota();
+            }
+        }
+
         echo wp_kses_post( $notice );
         ?>
         <p>
@@ -687,19 +695,36 @@ class WCOTL_Admin {
             <?php endif; ?>
 
             <!-- Provider selector + tracking reference form -->
-            <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
+            <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;">
                 <?php if ( count( $available_providers ) > 1 ) : ?>
                 <!-- Show provider selector when multiple providers are configured -->
-                <div class="wcotl-form-row" style="margin-bottom:0;width:200px;">
+                <div class="wcotl-form-row" style="margin-bottom:0;min-width:240px;">
                     <label>Provider</label>
                     <select id="wcotl-provider-select" onchange="wcotlOnProviderChange()">
-                        <?php foreach ( $available_providers as $p_slug => $p_name ) : ?>
-                            <option value="<?php echo esc_attr( $p_slug ); ?>" <?php selected( $at_provider, $p_slug ); ?>><?php echo esc_html( $p_name ); ?></option>
+                        <?php foreach ( $available_providers as $p_slug => $p_name ) : 
+                            $q_suffix = '';
+                            if ( isset( $provider_quotas[ $p_slug ] ) ) {
+                                $pq = $provider_quotas[ $p_slug ];
+                                if ( ! empty( $pq['unlimited'] ) ) {
+                                    $q_suffix = ' (Unlimited)';
+                                } elseif ( ! empty( $pq['supported'] ) && isset( $pq['remaining'] ) ) {
+                                    $q_suffix = ' (' . number_format_i18n( $pq['remaining'] ) . ' left)';
+                                }
+                            }
+                        ?>
+                            <option value="<?php echo esc_attr( $p_slug ); ?>" <?php selected( $at_provider, $p_slug ); ?>><?php echo esc_html( $p_name . $q_suffix ); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <?php elseif ( count( $available_providers ) === 1 ) : ?>
-                    <input type="hidden" id="wcotl-provider-select" value="<?php echo esc_attr( array_key_first( $available_providers ) ); ?>">
+                <?php elseif ( count( $available_providers ) === 1 ) : 
+                    $single_slug = array_key_first( $available_providers );
+                    $single_name = $available_providers[ $single_slug ];
+                ?>
+                    <input type="hidden" id="wcotl-provider-select" value="<?php echo esc_attr( $single_slug ); ?>">
+                    <div class="wcotl-form-row" style="margin-bottom:0;width:160px;">
+                        <label>Provider</label>
+                        <div style="font-weight:600;font-size:13px;padding:6px 0;"><?php echo esc_html( $single_name ); ?></div>
+                    </div>
                 <?php else : ?>
                     <input type="hidden" id="wcotl-provider-select" value="17track">
                 <?php endif; ?>
@@ -775,6 +800,14 @@ class WCOTL_Admin {
                             onclick="wcotlSaveAutoTracking()">💾 Save</button>
                 </div>
             </div>
+
+            <!-- Provider Quota & Status Box -->
+            <div id="wcotl-provider-quota-badge" style="margin-bottom:14px;padding:8px 12px;background:#f6f7f7;border:1px solid #dcdcde;border-radius:4px;font-size:12px;display:flex;align-items:center;justify-content:space-between;max-width:740px;line-height:1.4;">
+                <div id="wcotl-quota-badge-content" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                </div>
+                <div id="wcotl-quota-badge-action">
+                </div>
+            </div>
             <!-- Carrier search panel (shown when auto-detect finds nothing) -->
             <div id="wcotl-manual-carrier-row" style="display:none;margin-top:8px;padding:12px 14px;background:#fff8e5;border:1px solid #f0c060;border-radius:4px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
@@ -823,8 +856,86 @@ class WCOTL_Admin {
                 return sel ? sel.value : '17track';
             }
 
+            var WCOTL_PROVIDER_QUOTAS = <?php echo wp_json_encode( $provider_quotas ); ?>;
+
+            function wcotlUpdateQuotaBadge(provider) {
+                var contentEl = document.getElementById('wcotl-quota-badge-content');
+                var actionEl  = document.getElementById('wcotl-quota-badge-action');
+                if (!contentEl || !actionEl) return;
+
+                var q = (WCOTL_PROVIDER_QUOTAS && WCOTL_PROVIDER_QUOTAS[provider]) ? WCOTL_PROVIDER_QUOTAS[provider] : null;
+
+                if (provider === 'track123') {
+                    if (q && q.error) {
+                        contentEl.innerHTML = '<span class="dashicons dashicons-warning" style="color:#d63638;font-size:16px;line-height:1.2;"></span>' +
+                            '<span>Track123 Quota: <span style="color:#d63638;">' + q.error + '</span></span>';
+                    } else if (q && q.remaining !== null && q.total !== null) {
+                        var color = q.remaining <= 0 ? '#d63638' : (q.remaining <= 10 ? '#dba617' : '#008a20');
+                        var warning = q.remaining <= 0 ? ' <strong style="color:#d63638;">(Exhausted!)</strong>' : '';
+                        contentEl.innerHTML = '<span class="dashicons dashicons-chart-pie" style="color:' + color + ';font-size:16px;line-height:1.2;"></span>' +
+                            '<span>Track123 Quota: <strong style="color:' + color + ';">' + Number(q.remaining).toLocaleString() + ' / ' + Number(q.total).toLocaleString() + '</strong> shipments remaining' + warning + '</span>';
+                    } else if (q && q.remaining !== null) {
+                        contentEl.innerHTML = '<span class="dashicons dashicons-chart-pie" style="color:#008a20;font-size:16px;line-height:1.2;"></span>' +
+                            '<span>Track123 Quota: <strong>' + Number(q.remaining).toLocaleString() + '</strong> shipments remaining</span>';
+                    } else {
+                        contentEl.innerHTML = '<span class="dashicons dashicons-location" style="color:#2271b1;font-size:16px;line-height:1.2;"></span>' +
+                            '<span>Track123 auto-tracking configured</span>';
+                    }
+                    actionEl.innerHTML = '<button type="button" class="button button-small" onclick="wcotlRefreshQuota(\'track123\')" title="Fetch live remaining quota">↻ Refresh</button>';
+                } else if (provider === 'packlink') {
+                    contentEl.innerHTML = '<span class="dashicons dashicons-yes-alt" style="color:#008a20;font-size:16px;line-height:1.2;"></span>' +
+                        '<span>Packlink PRO: <strong>Unlimited</strong> tracking for Packlink shipments</span>';
+                    actionEl.innerHTML = '';
+                } else if (provider === 'fedex') {
+                    contentEl.innerHTML = '<span class="dashicons dashicons-yes-alt" style="color:#008a20;font-size:16px;line-height:1.2;"></span>' +
+                        '<span>FedEx API: <strong>Unlimited</strong> tracking (account rate limits apply)</span>';
+                    actionEl.innerHTML = '';
+                } else {
+                    // 17TRACK
+                    contentEl.innerHTML = '<span class="dashicons dashicons-info" style="color:#787c82;font-size:16px;line-height:1.2;"></span>' +
+                        '<span>17TRACK: Quota API not provided. <a href="https://api.17track.net" target="_blank" style="text-decoration:underline;">View balance on 17track.net ↗</a></span>';
+                    actionEl.innerHTML = '';
+                }
+            }
+
+            function wcotlRefreshQuota(provider) {
+                var contentEl = document.getElementById('wcotl-quota-badge-content');
+                var actionBtn = document.querySelector('#wcotl-quota-badge-action button');
+                if (actionBtn) actionBtn.disabled = true;
+                if (contentEl) contentEl.innerHTML = '<span style="color:#646970;">⏳ Refreshing live quota...</span>';
+
+                fetch(WCOTL_AJAX.url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: new URLSearchParams({
+                        action: 'wcotl_get_provider_quota',
+                        nonce: WCOTL_AJAX.nonce,
+                        provider: provider,
+                        force_refresh: 1
+                    })
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(res) {
+                    if (actionBtn) actionBtn.disabled = false;
+                    if (res.success && res.data) {
+                        WCOTL_PROVIDER_QUOTAS[provider] = res.data;
+                        var opt = document.querySelector('#wcotl-provider-select option[value="' + provider + '"]');
+                        if (opt && res.data.remaining !== null) {
+                            var pName = provider === 'track123' ? 'Track123' : provider;
+                            opt.textContent = pName + ' (' + Number(res.data.remaining).toLocaleString() + ' left)';
+                        }
+                    }
+                    wcotlUpdateQuotaBadge(provider);
+                })
+                .catch(function() {
+                    if (actionBtn) actionBtn.disabled = false;
+                    wcotlUpdateQuotaBadge(provider);
+                });
+            }
+
             function wcotlOnProviderChange() {
                 var provider = wcotlGetProvider();
+                wcotlUpdateQuotaBadge(provider);
                 var carrierRow    = document.getElementById('wcotl-carrier-row');
                 var carrierBtnRow = document.getElementById('wcotl-carrier-btn-row');
                 var labelEl       = document.getElementById('wcotl-real-number-label');
@@ -1143,6 +1254,9 @@ class WCOTL_Admin {
                     setTimeout(() => location.reload(), 1000);
                 }).catch(e => { msg.textContent = '❌ Network error.'; });
             }
+
+            // Initialize quota badge on page load
+            wcotlUpdateQuotaBadge(wcotlGetProvider());
             </script>
 
             <?php endif; // provider_active ?>

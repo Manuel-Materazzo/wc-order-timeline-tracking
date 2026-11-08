@@ -13,6 +13,7 @@
 * **Packlink PRO Sync**: Auto-fetch tracking events directly from your Packlink PRO shipment references (requires the Packlink PRO Shipping plugin).
 * **Automated FedEx Sync**: Auto-fetch tracking events directly using FedEx REST APIs via OAuth 2.0 (supports Production and Sandbox environments).
 * **Carrier Auto-Detection**: Automatically detect courier services based on the tracking number (17TRACK and Track123 providers).
+* **Live Account Quota Visibility**: View real-time remaining shipment quotas right inside the tracking provider selector and settings page (supports Track123 REST API v2.1 with live refresh, with Packlink and FedEx indicated as unlimited).
 * **Frontend Tracking Shortcode**: Display a sleek, modern, mobile-responsive tracking timeline to customers using `[wc_order_timeline_tracking]`.
 * **Refund Column Integration**: Adds timeline visibility directly inside WooCommerce admin order lists.
 * **Order List Quick Action**: One-click quick button in WooCommerce admin order lists (both classic CPT and HPOS) to jump straight to an order's tracking edit page.
@@ -142,5 +143,6 @@ When fulfilling WooCommerce orders, courier shipping costs can vary between Pack
 | Authentication | Static API Token (`17token` header) | API Key (`Track123-Api-Secret` header) | API Key header | OAuth 2.0 Bearer Token (Client Credentials) |
 | Environments | Production | Production | Production | Production & Sandbox |
 | Carrier selection | Auto-detect or carrier code | Auto-detect or courier code | N/A | Dedicated FedEx carrier |
+| Remaining quota API | ❌ Not in API (view on api.17track.net) | ✅ Yes (`GET /tk/v2.1/account/quota`) | ✅ Unlimited (Packlink shipments) | ✅ Unlimited (Direct API account) |
 | Plugin requirement | None | None | Packlink PRO Shipping plugin | None |
 | Per-code setup | Real tracking # + optional carrier code | Real tracking # + optional courier code | Shipment Reference only | Real FedEx tracking # |

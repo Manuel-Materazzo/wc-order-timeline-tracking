@@ -534,6 +534,26 @@ class WCOTL_Auto_Sync {
     }
 
     /**
+     * Resolve and return the provider instance matching a slug ('17track', 'track123', 'packlink', 'fedex').
+     *
+     * @param string $slug
+     * @return WCOTL_Tracking_Provider|null
+     */
+    public static function get_provider_by_slug( string $slug ): ?WCOTL_Tracking_Provider {
+        switch ( $slug ) {
+            case 'track123':
+                return self::get_track123_provider();
+            case 'fedex':
+                return self::get_fedex_provider();
+            case 'packlink':
+                return self::get_packlink_provider();
+            case '17track':
+            default:
+                return self::get_provider();
+        }
+    }
+
+    /**
      * Resolve and return the correct provider for a specific tracking code.
      *
      * The provider slug is stored in META_PROVIDER:
@@ -547,16 +567,7 @@ class WCOTL_Auto_Sync {
      */
     public static function get_provider_for_code( string $tracking_code ): ?WCOTL_Tracking_Provider {
         $slug = WCOTL_DB::get_meta( $tracking_code, self::META_PROVIDER ) ?: '17track';
-        if ( $slug === 'track123' ) {
-            return self::get_track123_provider();
-        }
-        if ( $slug === 'fedex' ) {
-            return self::get_fedex_provider();
-        }
-        if ( $slug === 'packlink' ) {
-            return self::get_packlink_provider();
-        }
-        return self::get_provider();
+        return self::get_provider_by_slug( $slug );
     }
 
     /**

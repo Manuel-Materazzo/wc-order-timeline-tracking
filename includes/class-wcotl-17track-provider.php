@@ -70,6 +70,26 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
     }
 
     /**
+     * Quota information for 17TRACK.
+     *
+     * Note: The official 17TRACK API does not provide a programmatic balance/quota endpoint.
+     * Account usage must be monitored directly on api.17track.net.
+     *
+     * @param bool $force_refresh
+     * @return array{supported:bool, unlimited:bool, remaining:int|null, total:int|null, label:string|null, error:string|null}
+     */
+    public function get_quota( bool $force_refresh = false ): array {
+        return [
+            'supported' => false,
+            'unlimited' => false,
+            'remaining' => null,
+            'total'     => null,
+            'label'     => null,
+            'error'     => null,
+        ];
+    }
+
+    /**
      * Register a shipment with 17TRACK.
      *
      * @param string          $real_tracking_number Carrier tracking number.

@@ -33,10 +33,11 @@ class WCOTL_Track123_Provider extends WCOTL_Tracking_Provider {
     const BASE_URL = 'https://api.track123.com/gateway/open-api/';
 
     /** Endpoints */
-    const IMPORT_ENDPOINT       = 'tk/v2.1/track/import';
-    const QUERY_ENDPOINT        = 'tk/v2.1/track/query';
-    const DETECTION_ENDPOINT    = 'tk/v2.1/courier/detection';
-    const CARRIER_LIST_ENDPOINT = 'tk/v2.1/courier/list';
+    const IMPORT_ENDPOINT        = 'tk/v2.1/track/import';
+    const QUERY_ENDPOINT         = 'tk/v2.1/track/query';
+    const DETECTION_ENDPOINT     = 'tk/v2.1/courier/detection';
+    const CARRIER_LIST_ENDPOINT  = 'tk/v2.1/courier/list';
+    const ACCOUNT_QUOTA_ENDPOINT = 'tk/v2.1/account/quota';
 
     /**
      * Track123 transit status string → normalised status mapping.
@@ -109,6 +110,7 @@ class WCOTL_Track123_Provider extends WCOTL_Tracking_Provider {
 
         // Successfully registered/imported
         if ( ! empty( $accepted ) ) {
+            delete_transient( 'wcotl_track123_quota_' . md5( $this->api_key ) );
             $assigned_carrier = $accepted[0]['courierCode'] ?? null;
             return [
                 'success'      => true,
@@ -297,6 +299,83 @@ class WCOTL_Track123_Provider extends WCOTL_Tracking_Provider {
             }
         }
         return $map;
+    }
+
+    /**
+     * Retrieve quota and balance information for the Track123 account.
+     *
+     * @param bool $force_refresh Whether to bypass transient cache.
+     * @return array{supported:bool, unlimited:bool, remaining:int|null, total:int|null, label:string|null, error:string|null, overage_enabled?:bool, overage_used?:int}
+     */
+    public function get_quota( bool $force_refresh = false ): array {
+        if ( ! $this->is_configured() ) {
+            return [
+                'supported' => true,
+                'unlimited' => false,
+                'remaining' => null,
+                'total'     => null,
+                'label'     => null,
+                'error'     => 'Track123 API Key is not configured.',
+            ];
+        }
+
+        $transient_key = 'wcotl_track123_quota_' . md5( $this->api_key );
+
+        if ( ! $force_refresh ) {
+            $cached = get_transient( $transient_key );
+            if ( is_array( $cached ) && isset( $cached['supported'] ) ) {
+                return $cached;
+            }
+        }
+
+        $response = $this->request( self::ACCOUNT_QUOTA_ENDPOINT, 'GET' );
+
+        if ( is_wp_error( $response ) ) {
+            return [
+                'supported' => true,
+                'unlimited' => false,
+                'remaining' => null,
+                'total'     => null,
+                'label'     => null,
+                'error'     => $response->get_error_message(),
+            ];
+        }
+
+        if ( ( $response['code'] ?? '' ) !== '00000' ) {
+            $msg = $response['msg'] ?? 'Unable to fetch quota from Track123';
+            return [
+                'supported' => true,
+                'unlimited' => false,
+                'remaining' => null,
+                'total'     => null,
+                'label'     => null,
+                'error'     => $msg,
+            ];
+        }
+
+        $data            = $response['data'] ?? [];
+        $remaining       = isset( $data['quotaRemain'] ) ? (int) $data['quotaRemain'] : null;
+        $total           = isset( $data['quotaTotal'] ) ? (int) $data['quotaTotal'] : null;
+        $overage_enabled = ! empty( $data['overageEnabled'] );
+        $overage_used    = isset( $data['overageUsed'] ) ? (int) $data['overageUsed'] : 0;
+
+        $label = ( $remaining !== null && $total !== null )
+            ? sprintf( '%s / %s left', number_format_i18n( $remaining ), number_format_i18n( $total ) )
+            : ( ( $remaining !== null ) ? sprintf( '%s left', number_format_i18n( $remaining ) ) : null );
+
+        $result = [
+            'supported'       => true,
+            'unlimited'       => false,
+            'remaining'       => $remaining,
+            'total'           => $total,
+            'overage_enabled' => $overage_enabled,
+            'overage_used'    => $overage_used,
+            'label'           => $label,
+            'error'           => null,
+        ];
+
+        set_transient( $transient_key, $result, 10 * MINUTE_IN_SECONDS );
+        return $result;
     }
 
     /* ------------------------------------------------------------------

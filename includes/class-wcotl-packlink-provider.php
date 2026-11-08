@@ -80,6 +80,24 @@ class WCOTL_Packlink_Provider extends WCOTL_Tracking_Provider {
     }
 
     /**
+     * Quota information for Packlink PRO.
+     * Packlink PRO tracking is unlimited for shipments handled via their platform.
+     *
+     * @param bool $force_refresh
+     * @return array{supported:bool, unlimited:bool, remaining:int|null, total:int|null, label:string|null, error:string|null}
+     */
+    public function get_quota( bool $force_refresh = false ): array {
+        return [
+            'supported' => true,
+            'unlimited' => true,
+            'remaining' => null,
+            'total'     => null,
+            'label'     => 'Unlimited',
+            'error'     => null,
+        ];
+    }
+
+    /**
      * Packlink does not require pre-registration of a shipment reference.
      * This is a no-op that always returns success.
      *

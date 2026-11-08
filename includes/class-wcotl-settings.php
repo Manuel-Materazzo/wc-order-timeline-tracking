@@ -22,6 +22,8 @@ class WCOTL_Settings {
         add_action( 'wp_ajax_wcotl_detect_carriers',  [ __CLASS__, 'ajax_detect_carriers' ] );
         // AJAX: fetch Track123 courier list
         add_action( 'wp_ajax_wcotl_get_track123_carriers', [ __CLASS__, 'ajax_get_track123_carriers' ] );
+        // AJAX: fetch provider quota
+        add_action( 'wp_ajax_wcotl_get_provider_quota', [ __CLASS__, 'ajax_get_provider_quota' ] );
         // AJAX: manually trigger sync for a single code
         add_action( 'wp_ajax_wcotl_sync_now',         [ __CLASS__, 'ajax_sync_now' ] );
         // AJAX: register / update real tracking number for a code
@@ -93,6 +95,7 @@ class WCOTL_Settings {
         if ( isset( $_POST['wcotl_track123_api_key'] ) ) {
             $track123_key = sanitize_text_field( wp_unslash( $_POST['wcotl_track123_api_key'] ) );
             update_option( 'wcotl_track123_api_key', $track123_key );
+            delete_transient( 'wcotl_track123_quota_' . md5( $track123_key ) );
         }
         if ( isset( $_POST['wcotl_packlink_api_key'] ) ) {
             $packlink_key = sanitize_text_field( wp_unslash( $_POST['wcotl_packlink_api_key'] ) );
@@ -216,6 +219,28 @@ class WCOTL_Settings {
 
         $carriers = $provider->get_courier_list();
         wp_send_json_success( $carriers );
+    }
+
+    /* ------------------------------------------------------------------
+     * AJAX: fetch provider quota and balance
+     * ------------------------------------------------------------------ */
+
+    public static function ajax_get_provider_quota(): void {
+        check_ajax_referer( 'wcotl_admin_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( 'Not allowed.' );
+        }
+
+        $provider_slug = sanitize_key( $_POST['provider'] ?? 'track123' );
+        $force_refresh = ! empty( $_POST['force_refresh'] );
+
+        $provider = WCOTL_Auto_Sync::get_provider_by_slug( $provider_slug );
+        if ( ! $provider || ! $provider->is_configured() ) {
+            wp_send_json_error( 'Provider is not configured.' );
+        }
+
+        $quota = $provider->get_quota( $force_refresh );
+        wp_send_json_success( $quota );
     }
 
     /* ------------------------------------------------------------------
@@ -446,6 +471,10 @@ class WCOTL_Settings {
                         </small>
                     </div>
 
+                    <div style="margin:10px 0 16px;padding:8px 10px;background:#f0f0f1;border-radius:3px;font-size:11px;color:#50575e;line-height:1.4;">
+                        ℹ <strong>Note on 17TRACK Quotas:</strong> 17TRACK does not provide an API endpoint to query remaining quota programmatically. You can view your live account balance and remaining tracking credits on the <a href="https://api.17track.net" target="_blank" style="text-decoration:underline;">17TRACK Management Console ↗</a>.
+                    </div>
+
                     <div class="wcotl-form-row">
                         <label>Sync Interval (hours)</label>
                         <input type="number" name="wcotl_sync_interval"
@@ -521,6 +550,41 @@ class WCOTL_Settings {
                             Leave empty to disable Track123 auto-tracking.
                         </small>
                     </div>
+
+                    <?php if ( $track123_api_key ) : 
+                        $t123_provider = WCOTL_Auto_Sync::get_track123_provider();
+                        $t123_quota    = $t123_provider ? $t123_provider->get_quota() : null;
+                    ?>
+                        <div id="wcotl-track123-quota-box" style="margin:14px 0;padding:12px 14px;background:#f8f9fa;border:1px solid #dcdcde;border-radius:4px;">
+                            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                                <div>
+                                    <strong style="font-size:12px;color:#1d2327;">Account Tracking Quota:</strong>
+                                    <span id="wcotl-t123-quota-display" style="margin-left:6px;font-size:13px;">
+                                        <?php if ( ! empty( $t123_quota['error'] ) ) : ?>
+                                            <span style="color:#d63638;"><?php echo esc_html( $t123_quota['error'] ); ?></span>
+                                        <?php elseif ( isset( $t123_quota['remaining'], $t123_quota['total'] ) ) : ?>
+                                            <span style="font-weight:600;color:<?php echo ( $t123_quota['remaining'] <= 0 ) ? '#d63638' : '#008a20'; ?>;">
+                                                <?php echo esc_html( number_format_i18n( $t123_quota['remaining'] ) ); ?> / <?php echo esc_html( number_format_i18n( $t123_quota['total'] ) ); ?>
+                                            </span> shipments remaining
+                                        <?php else : ?>
+                                            <span style="color:#646970;">Unknown</span>
+                                        <?php endif; ?>
+                                    </span>
+                                </div>
+                                <button type="button" class="button button-small" id="wcotl-t123-refresh-btn" onclick="wcotlRefreshTrack123Quota(this)">
+                                    ↻ Refresh Quota
+                                </button>
+                            </div>
+                            <?php if ( isset( $t123_quota['remaining'], $t123_quota['total'] ) && $t123_quota['total'] > 0 ) : 
+                                $pct = max( 0, min( 100, (int) round( ( $t123_quota['remaining'] / $t123_quota['total'] ) * 100 ) ) );
+                                $bar_color = ( $pct > 20 ) ? '#008a20' : ( ( $pct > 5 ) ? '#dba617' : '#d63638' );
+                            ?>
+                                <div id="wcotl-t123-progress-bar-wrap" style="margin-top:8px;background:#e2e4e7;border-radius:3px;height:6px;overflow:hidden;position:relative;">
+                                    <div id="wcotl-t123-progress-bar" style="width:<?php echo $pct; ?>%;background:<?php echo $bar_color; ?>;height:100%;"></div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
 
                     <button type="submit" class="button button-primary" style="margin-top:8px;">
                         Save Track123 Settings
@@ -807,6 +871,54 @@ class WCOTL_Settings {
                 </ul>
             </div>
         </div>
+
+        <script>
+        function wcotlRefreshTrack123Quota(btn) {
+            var disp = document.getElementById('wcotl-t123-quota-display');
+            var bar  = document.getElementById('wcotl-t123-progress-bar');
+            if (btn) btn.disabled = true;
+            if (disp) disp.innerHTML = '<span style="color:#646970;">⏳ Refreshing...</span>';
+
+            var params = new URLSearchParams();
+            params.append('action', 'wcotl_get_provider_quota');
+            params.append('nonce', <?php echo json_encode( wp_create_nonce( 'wcotl_admin_nonce' ) ); ?>);
+            params.append('provider', 'track123');
+            params.append('force_refresh', '1');
+
+            fetch(ajaxurl, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: params
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                if (btn) btn.disabled = false;
+                if (res.success && res.data) {
+                    var d = res.data;
+                    if (d.error) {
+                        disp.innerHTML = '<span style="color:#d63638;">' + d.error + '</span>';
+                    } else if (d.remaining !== null && d.total !== null) {
+                        var color = d.remaining <= 0 ? '#d63638' : '#008a20';
+                        disp.innerHTML = '<span style="font-weight:600;color:' + color + ';">' +
+                            Number(d.remaining).toLocaleString() + ' / ' + Number(d.total).toLocaleString() +
+                            '</span> shipments remaining';
+                        if (bar && d.total > 0) {
+                            var pct = Math.max(0, Math.min(100, Math.round((d.remaining / d.total) * 100)));
+                            var barColor = pct > 20 ? '#008a20' : (pct > 5 ? '#dba617' : '#d63638');
+                            bar.style.width = pct + '%';
+                            bar.style.background = barColor;
+                        }
+                    }
+                } else {
+                    disp.innerHTML = '<span style="color:#d63638;">Failed to load quota</span>';
+                }
+            })
+            .catch(function() {
+                if (btn) btn.disabled = false;
+                disp.innerHTML = '<span style="color:#d63638;">Network error</span>';
+            });
+        }
+        </script>
         <?php
     }
 

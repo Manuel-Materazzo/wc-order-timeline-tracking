@@ -51,4 +51,21 @@ abstract class WCOTL_Tracking_Provider {
      * @return array<int|string, string>  Map of carrier_code => carrier_name
      */
     abstract public function detect_carriers( string $real_tracking_number ): array;
+
+    /**
+     * Retrieve quota and balance information for this provider account, if available.
+     *
+     * @param bool $force_refresh
+     * @return array{supported:bool, unlimited:bool, remaining:int|null, total:int|null, label:string|null, error:string|null}
+     */
+    public function get_quota( bool $force_refresh = false ): array {
+        return [
+            'supported' => false,
+            'unlimited' => false,
+            'remaining' => null,
+            'total'     => null,
+            'label'     => null,
+            'error'     => null,
+        ];
+    }
 }

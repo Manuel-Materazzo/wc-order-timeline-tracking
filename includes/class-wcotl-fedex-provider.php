@@ -97,6 +97,24 @@ class WCOTL_Fedex_Provider extends WCOTL_Tracking_Provider {
     }
 
     /**
+     * Quota information for FedEx.
+     * Direct FedEx REST Track API usage is governed by account permissions/rate limits, not per-shipment quotas.
+     *
+     * @param bool $force_refresh
+     * @return array{supported:bool, unlimited:bool, remaining:int|null, total:int|null, label:string|null, error:string|null}
+     */
+    public function get_quota( bool $force_refresh = false ): array {
+        return [
+            'supported' => true,
+            'unlimited' => true,
+            'remaining' => null,
+            'total'     => null,
+            'label'     => 'Unlimited (Direct API)',
+            'error'     => null,
+        ];
+    }
+
+    /**
      * FedEx does not require pre-registration of tracking numbers.
      * Always returns success.
      *
