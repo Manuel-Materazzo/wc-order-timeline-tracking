@@ -399,11 +399,9 @@ class WCOTL_Rate_Comparator {
             return;
         }
 
-        $packlink_configured    = (bool) get_option( 'wcotl_packlink_api_key', '' );
-        $paccofacile_configured = self::get_paccofacile_provider()->is_configured();
         ?>
         <div id="wcotl-rates-modal-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100050;backdrop-filter:blur(2px);"></div>
-        <div id="wcotl-rates-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:92%;max-width:960px;max-height:90vh;background:#fff;border-radius:10px;box-shadow:0 20px 40px rgba(0,0,0,0.3);z-index:100060;display:none;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;">
+        <div id="wcotl-rates-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:92%;max-width:960px;max-height:90vh;background:#fff;border-radius:10px;box-shadow:0 20px 40px rgba(0,0,0,0.3);z-index:100060;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;">
             
             <!-- Modal Header -->
             <div style="background:#1d2327;color:#fff;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #3c434a;">

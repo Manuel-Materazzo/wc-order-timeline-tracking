@@ -181,7 +181,6 @@ class WCOTL_Shortcode {
         $code             = isset( $_GET['tracking'] ) ? sanitize_text_field( wp_unslash( $_GET['tracking'] ) ) : '';
         $turnstile_token  = isset( $_REQUEST['cf-turnstile-response'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['cf-turnstile-response'] ) ) : '';
         $steps            = [];
-        $meta             = null;
         $error            = '';
         $show_turnstile   = false;
 
@@ -194,7 +193,6 @@ class WCOTL_Shortcode {
                 $is_valid = self::verify_turnstile( $turnstile_token, $client_ip );
                 if ( $is_valid ) {
                     self::reset_rate_limit( $client_ip );
-                    $is_rate_limited = false;
                 } else {
                     self::check_rate_limit( $client_ip, $max_requests );
                     $error          = __( 'Security verification failed. Please complete the challenge and try again.', 'wc-order-timeline' );
@@ -334,7 +332,7 @@ class WCOTL_Shortcode {
                 <ul class="wcotl-timeline">
                     <?php foreach ( $steps as $i => $step ) :
                         $icon_key  = sanitize_key( $step->step_icon ?: 'truck' );
-                        $icon_svg  = isset( $icons[ $icon_key ] ) ? $icons[ $icon_key ] : $icons['truck'];
+                        $icon_svg  = $icons[ $icon_key ] ?? $icons['truck'];
                         $delay     = $i * 80; // ms
 
                         $step_ts = strtotime( $step->step_date );

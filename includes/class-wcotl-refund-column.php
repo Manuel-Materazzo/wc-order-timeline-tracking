@@ -20,7 +20,7 @@ class WCOTL_Refund_Column {
 
         add_filter( 'woocommerce_shop_order_list_table_columns', array( __CLASS__, 'add_column_hpos' ), 20 );
         add_action( 'woocommerce_shop_order_list_table_custom_column', array( __CLASS__, 'render_column_hpos' ), 10, 2 );
-        add_filter( 'woocommerce_shop_order_list_table_orders', array( __CLASS__, 'prime_orders_cache_hpos' ), 10, 1 );
+        add_filter( 'woocommerce_shop_order_list_table_orders', array( __CLASS__, 'prime_orders_cache_hpos' ) );
 
         add_action( 'admin_head', array( __CLASS__, 'column_styles' ) );
     }
@@ -33,7 +33,7 @@ class WCOTL_Refund_Column {
      * @return array
      */
     public static function prime_orders_cache_cpt( array $posts, $query = null ): array {
-        if ( ! is_admin() || empty( $posts ) || ! is_array( $posts ) ) {
+        if ( ! is_admin() || empty( $posts ) ) {
             return $posts;
         }
 
@@ -65,7 +65,7 @@ class WCOTL_Refund_Column {
      * @return array
      */
     public static function prime_orders_cache_hpos( array $orders ): array {
-        if ( empty( $orders ) || ! is_array( $orders ) ) {
+        if ( empty( $orders ) ) {
             return $orders;
         }
 
@@ -211,9 +211,8 @@ class WCOTL_Refund_Column {
             $deadline = clone $delivery;
             $deadline->modify( "+$window_days days" );
             $today = new DateTime( 'today' );
-            $diff  = (int) $today->diff( $deadline )->format( '%r%a' );
-            return $diff; // positivo = giorni rimasti, negativo = già scaduto
-        } catch ( Exception $e ) {
+            return (int) $today->diff( $deadline )->format( '%r%a' ); // positivo = giorni rimasti, negativo = già scaduto
+        } catch ( Exception ) {
             return 0;
         }
     }

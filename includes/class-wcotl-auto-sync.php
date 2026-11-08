@@ -213,6 +213,8 @@ class WCOTL_Auto_Sync {
      *   fetch_failed       – 17TRACK returned an error for gettrackinfo
      *   complete           – sync ran to completion (status + events stored)
      *
+     * @param string                       $tracking_code Tracking code to sync.
+     * @param WCOTL_Tracking_Provider|null $provider      Optional provider instance.
      * @return array
      */
     public static function sync_code( string $tracking_code, ?WCOTL_Tracking_Provider $provider = null ): array {
@@ -286,9 +288,14 @@ class WCOTL_Auto_Sync {
 
         // Handle terminal states.
         if ( $status === 'delivered' ) {
-            $delivered_date = $last_event_date
-                ? ( new DateTime( $last_event_date ) )->format( 'Y-m-d' )
-                : current_time( 'Y-m-d' );
+            $delivered_date = current_time( 'Y-m-d' );
+            if ( $last_event_date ) {
+                try {
+                    $delivered_date = ( new DateTime( $last_event_date ) )->format( 'Y-m-d' );
+                } catch ( Exception ) {
+                    // Keep current time fallback.
+                }
+            }
             WCOTL_DB::set_meta( $tracking_code, 'delivered_at', $delivered_date );
             self::stop_sync( $tracking_code, 'delivered' );
             return [
@@ -400,7 +407,7 @@ class WCOTL_Auto_Sync {
             if ( isset( $existing_keys[ $key ] ) ) continue;
             if ( empty( $ev['label'] ) ) continue;
 
-            $note = $ev['location'] ? $ev['location'] : null;
+            $note = $ev['location'] ?: null;
 
             $rows_to_insert[] = [
                 'tracking_code' => $tracking_code,

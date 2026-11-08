@@ -26,7 +26,7 @@ class WCOTL_Order_Actions {
         } );
 
         // Prime cache for HPOS list
-        add_filter( 'woocommerce_shop_order_list_table_orders', array( __CLASS__, 'prime_orders_cache_hpos' ), 10, 1 );
+        add_filter( 'woocommerce_shop_order_list_table_orders', array( __CLASS__, 'prime_orders_cache_hpos' ) );
 
         // Button styles
         add_action( 'admin_head', array( __CLASS__, 'action_button_styles' ) );
@@ -40,7 +40,7 @@ class WCOTL_Order_Actions {
      * @return array
      */
     public static function prime_orders_cache_cpt( array $posts, $query = null ): array {
-        if ( ! is_admin() || empty( $posts ) || ! is_array( $posts ) ) {
+        if ( ! is_admin() || empty( $posts ) ) {
             return $posts;
         }
 
@@ -71,7 +71,7 @@ class WCOTL_Order_Actions {
      * @return array
      */
     public static function prime_orders_cache_hpos( array $orders ): array {
-        if ( empty( $orders ) || ! is_array( $orders ) ) {
+        if ( empty( $orders ) ) {
             return $orders;
         }
 
@@ -229,7 +229,7 @@ class WCOTL_Order_Actions {
             text-indent: -9999px;
         }
         .wc-action-button-wcotl_tracking::after {
-            font-family: Dashicons, dashicons;
+            font-family: Dashicons, dashicons, sans-serif;
             content: "\f319" !important; /* dashicons-location-alt */
             speak: never;
             font-weight: 400;
@@ -251,7 +251,7 @@ class WCOTL_Order_Actions {
             color: #135e96;
         }
         .wc-action-button-wcotl_tracking_create::after {
-            font-family: Dashicons, dashicons;
+            font-family: Dashicons, dashicons, sans-serif;
             content: "\f502" !important; /* dashicons-plus-alt */
             speak: never;
             font-weight: 400;

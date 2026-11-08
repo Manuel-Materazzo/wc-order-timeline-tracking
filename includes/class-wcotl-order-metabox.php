@@ -27,7 +27,6 @@ class WCOTL_Order_Metabox {
     }
 
     public static function render( $post_or_order ): void {
-        global $wpdb;
         $order_id   = is_a( $post_or_order, 'WC_Order' ) ? $post_or_order->get_id() : $post_or_order->ID;
         $codes = WCOTL_DB::get_tracking_codes_for_order( $order_id );
 

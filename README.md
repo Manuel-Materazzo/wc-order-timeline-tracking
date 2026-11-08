@@ -150,7 +150,7 @@ When fulfilling WooCommerce orders, courier shipping costs can vary between Pack
 ### Provider Comparison
 
 | Feature | 17TRACK | Track123 | Packlink PRO | FedEx |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | Tracking identifier | Carrier tracking number | Carrier tracking number | Packlink Shipment Reference | FedEx Tracking Number |
 | Authentication | Static API Token (`17token` header) | API Key (`Track123-Api-Secret` header) | API Key header | OAuth 2.0 Bearer Token (Client Credentials) |
 | Environments | Production | Production | Production | Production & Sandbox |

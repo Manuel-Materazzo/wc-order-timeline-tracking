@@ -350,7 +350,7 @@ class WCOTL_Fedex_Provider extends WCOTL_Tracking_Provider {
      * @return string|null
      */
     private function format_scan_location( array $loc ): ?string {
-        if ( empty( $loc ) || ! is_array( $loc ) ) {
+        if ( empty( $loc ) ) {
             return null;
         }
 

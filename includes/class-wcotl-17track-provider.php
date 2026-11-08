@@ -97,7 +97,7 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
      * @return array{success:bool, carrier_code:int|null, error:string|null}
      */
     public function register_shipment( string $real_tracking_number, int|string|null $carrier_code = null ): array {
-        $numeric_carrier = ( $carrier_code !== null && is_numeric( $carrier_code ) && (int) $carrier_code > 0 ) ? (int) $carrier_code : null;
+        $numeric_carrier = ( is_numeric( $carrier_code ) && (int) $carrier_code > 0 ) ? (int) $carrier_code : null;
         $payload = [ [ 'number' => $real_tracking_number ] ];
         if ( $numeric_carrier !== null ) {
             $payload[0]['carrier'] = $numeric_carrier;

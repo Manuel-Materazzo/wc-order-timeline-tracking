@@ -706,7 +706,7 @@ class WCOTL_Settings {
 
                             <?php if ( $track123_api_key ) :
                                 $t123_provider = WCOTL_Auto_Sync::get_track123_provider();
-                                $t123_quota    = $t123_provider ? $t123_provider->get_quota() : null;
+                                $t123_quota    = $t123_provider?->get_quota();
                             ?>
                                 <div id="wcotl-track123-quota-box" style="margin:14px 0;padding:12px 14px;background:#f8f9fa;border:1px solid #dcdcde;border-radius:4px;max-width:580px;">
                                     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
@@ -1402,7 +1402,7 @@ class WCOTL_Settings {
             }, true);
 
             confirmBtn.addEventListener('click', function() {
-                var deleteData = checkbox.checked ? 1 : 0;
+                var deleteData = checkbox.checked ? '1' : '0';
                 confirmBtn.disabled = true;
                 confirmBtn.textContent = <?php echo json_encode( __( 'Saving preference...', 'wc-order-timeline' ) ); ?>;
 

@@ -16,6 +16,20 @@ class WCOTL_Admin {
     }
 
     /**
+     * Safely format a date string without throwing uncaught DateTime exceptions.
+     */
+    private static function format_date_safe( ?string $date, string $format = 'd/m/Y' ): string {
+        if ( empty( $date ) ) {
+            return '';
+        }
+        try {
+            return ( new DateTime( $date ) )->format( $format );
+        } catch ( Exception ) {
+            return $date;
+        }
+    }
+
+    /**
      * Customize browser <title> on the edit/view tracking code page.
      *
      * @param string $admin_title Current admin title.
@@ -479,8 +493,8 @@ class WCOTL_Admin {
         // Determine which providers are configured.
         $has_17track         = (bool) get_option( 'wcotl_17track_api_key', '' );
         $has_track123        = (bool) get_option( 'wcotl_track123_api_key', '' );
-        $has_packlink        = WCOTL_Packlink_Provider::is_packlink_plugin_active() && (bool) get_option( 'wcotl_packlink_api_key', '' );
-        $has_fedex           = (bool) ( get_option( 'wcotl_fedex_client_id', '' ) && get_option( 'wcotl_fedex_client_secret', '' ) );
+        $has_packlink        = WCOTL_Packlink_Provider::is_packlink_plugin_active() && ! empty( get_option( 'wcotl_packlink_api_key', '' ) );
+        $has_fedex           = ! empty( get_option( 'wcotl_fedex_client_id', '' ) ) && ! empty( get_option( 'wcotl_fedex_client_secret', '' ) );
         $provider_active     = $has_17track || $has_track123 || $has_packlink || $has_fedex;
         $packlink_available  = WCOTL_Packlink_Provider::is_packlink_plugin_active();
 
@@ -576,7 +590,7 @@ class WCOTL_Admin {
                 </button>
                 <?php if ( $estimated_delivery ) : ?>
                     <span style="font-size:12px;color:#008a20;padding-bottom:10px;">
-                        ✓ Currently: <?php echo esc_html( (new DateTime($estimated_delivery))->format('d/m/Y') ); ?>
+                        ✓ Currently: <?php echo esc_html( self::format_date_safe( $estimated_delivery, 'd/m/Y' ) ); ?>
                     </span>
                 <?php else : ?>
                     <span style="font-size:12px;color:#888;padding-bottom:10px;">Not set yet</span>
@@ -602,7 +616,7 @@ class WCOTL_Admin {
                 </button>
                 <?php if ( $delivered_at ) : ?>
                     <span style="font-size:12px;color:#1e8449;padding-bottom:10px;">
-                        ✓ Delivered on: <?php echo esc_html( (new DateTime($delivered_at))->format('d/m/Y') ); ?>
+                        ✓ Delivered on: <?php echo esc_html( self::format_date_safe( $delivered_at, 'd/m/Y' ) ); ?>
                     </span>
                 <?php else : ?>
                     <span style="font-size:12px;color:#888;align-self:center;">Not delivered yet</span>
@@ -636,13 +650,13 @@ class WCOTL_Admin {
                             <span style="font-size:12px;color:#646970;">Status: <strong><?php echo esc_html($at_last_status); ?></strong></span>
                         <?php endif; ?>
                         <?php if ( $at_last_event ) : ?>
-                            <span style="font-size:12px;color:#646970;">Last event: <?php echo esc_html((new DateTime($at_last_event))->format('d/m/Y H:i')); ?></span>
+                            <span style="font-size:12px;color:#646970;">Last event: <?php echo esc_html( self::format_date_safe( $at_last_event, 'd/m/Y H:i' ) ); ?></span>
                         <?php endif; ?>
                     <?php else : ?>
                         <span class="wcotl-sync-status wcotl-sync-pending">⏳ Waiting for first sync</span>
                     <?php endif; ?>
 
-                    <?php if ( $at_real_number && ! $at_stopped ) : ?>
+                    <?php if ( ! $at_stopped ) : ?>
                         <button class="button button-secondary button-small" id="wcotl-sync-now-btn"
                                 onclick="wcotlSyncNow()">
                             ↻ Sync now
@@ -783,7 +797,7 @@ class WCOTL_Admin {
                     </label>
                     <select id="wcotl-carrier-select">
                         <option value="0">— Auto-detect —</option>
-                        <?php if ( $at_carrier !== '' && $at_carrier !== 0 && $at_carrier !== '0' ) : ?>
+                        <?php if ( $at_carrier !== '' && $at_carrier !== '0' ) : ?>
                             <option value="<?php echo esc_attr( $at_carrier ); ?>" selected>
                                 <?php echo esc_html( is_numeric( $at_carrier ) ? "Carrier #{$at_carrier} (saved)" : "Carrier: {$at_carrier} (saved)" ); ?>
                             </option>
@@ -1018,12 +1032,12 @@ class WCOTL_Admin {
             var _wcotlTrack123Fetch       = null; // in-flight promise
 
             function wcotlLoadCarrierList() {
+                var status = document.getElementById('wcotl-carrier-search-status');
                 var provider = wcotlGetProvider();
                 if ( provider === 'track123' ) {
                     if (_wcotlTrack123CarrierList) return Promise.resolve(_wcotlTrack123CarrierList);
                     if (_wcotlTrack123Fetch) return _wcotlTrack123Fetch;
-                    var status = document.getElementById('wcotl-carrier-search-status');
-                    status.textContent = '⏳ Loading Track123 courier list…';
+                    if (status) status.textContent = '⏳ Loading Track123 courier list…';
                     _wcotlTrack123Fetch = fetch(WCOTL_AJAX.url, {
                         method: 'POST',
                         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -1033,7 +1047,7 @@ class WCOTL_Admin {
                         })
                     }).then(r => r.json()).then(res => {
                         if (!res.success) {
-                            status.textContent = '❌ Could not load Track123 courier list.';
+                            if (status) status.textContent = '❌ Could not load Track123 courier list.';
                             return [];
                         }
                         _wcotlTrack123CarrierList = (res.data || []).map(function(c) {
@@ -1043,10 +1057,10 @@ class WCOTL_Admin {
                                 country: c.courierNameCN || ''
                             };
                         });
-                        status.textContent = _wcotlTrack123CarrierList.length + ' couriers loaded. Type to search.';
+                        if (status) status.textContent = _wcotlTrack123CarrierList.length + ' couriers loaded. Type to search.';
                         return _wcotlTrack123CarrierList;
                     }).catch(() => {
-                        status.textContent = '❌ Could not load Track123 courier list.';
+                        if (status) status.textContent = '❌ Could not load Track123 courier list.';
                         return [];
                     });
                     return _wcotlTrack123Fetch;
@@ -1054,8 +1068,7 @@ class WCOTL_Admin {
 
                 if (_wcotlCarrierList) return Promise.resolve(_wcotlCarrierList);
                 if (_wcotlCarrierFetch) return _wcotlCarrierFetch;
-                var status = document.getElementById('wcotl-carrier-search-status');
-                status.textContent = '⏳ Loading carrier list…';
+                if (status) status.textContent = '⏳ Loading carrier list…';
                 _wcotlCarrierFetch = fetch('https://res.17track.net/asset/carrier/info/apicarrier.all.json', { cache: 'force-cache' })
                     .then(r => r.json())
                     .then(data => {
@@ -1202,9 +1215,9 @@ class WCOTL_Admin {
                     })
                 }).then(r => r.json()).then(res => {
                     if (btn) btn.disabled = false;
+                    var d = res.data || {};
                     if (!res.success) {
                         // Sync stopped before completing — show step + error.
-                        var d = res.data || {};
                         var stepLabels = {
                             no_provider:         '❌ No API key configured',
                             no_real_number:      '❌ No tracking reference saved',
@@ -1217,7 +1230,6 @@ class WCOTL_Admin {
                             + (d.error ? '<br><span style="font-size:11px;">' + d.error + '</span>' : '');
                         return;
                     }
-                    var d = res.data || {};
                     msg.style.color = '#1e8449';
                     var statusLine = d.status ? d.status : 'unknown';
                     var eventsLine = typeof d.events_added !== 'undefined'
@@ -1291,10 +1303,6 @@ class WCOTL_Admin {
                             'wcotl_delete_step'
                         );
                         $edit_nonce = wp_create_nonce( 'wcotl_edit_step_' . $s->id );
-                        $void_nonce = wp_nonce_url(
-                            admin_url('admin.php?page=wcotl-tracking&view=' . urlencode($code) . '&action=void_step&step_id=' . $s->id),
-                            'wcotl_void_step_' . $s->id
-                        );
                         $unvoid_nonce = wp_nonce_url(
                             admin_url('admin.php?page=wcotl-tracking&view=' . urlencode($code) . '&action=unvoid_step&step_id=' . $s->id),
                             'wcotl_void_step_' . $s->id
@@ -1307,7 +1315,7 @@ class WCOTL_Admin {
                         <div class="wcotl-step-row" id="wcotl-view-<?php echo $s->id; ?>" style="display:flex;gap:12px;align-items:flex-start;">
                             <div class="wcotl-step-meta" style="flex:1;">
                                 <strong style="<?php echo $is_voided ? 'text-decoration:line-through;color:#a09a94;' : ''; ?>"><?php echo esc_html($s->step_label); ?></strong>
-                                <?php $src = isset($s->step_source) ? $s->step_source : 'manual'; ?>
+                                <?php $src = $s->step_source ?? 'manual'; ?>
                                 <span class="wcotl-source-badge <?php echo $src === 'auto' ? 'wcotl-source-auto' : 'wcotl-source-manual'; ?>">
                                     <?php echo $src === 'auto' ? '🛰 auto' : '✍ manual'; ?>
                                 </span>
@@ -1552,13 +1560,13 @@ class WCOTL_Admin {
 
         $order_id            = absint( $_GET['order_id'] ?? 0 );
         $packlink_data       = $order_id ? WCOTL_Packlink_Provider::get_order_packlink_data( $order_id ) : null;
-        $suggested           = 'TRK-' . date('Ymd') . '-' . strtoupper( wp_generate_password(4, false, false) );
+        $suggested           = 'TRK-' . date('Ymd') . '-' . strtoupper( wp_generate_password(4, false) );
 
         // Available auto-tracking providers
         $has_17track        = (bool) get_option( 'wcotl_17track_api_key', '' );
         $has_track123       = (bool) get_option( 'wcotl_track123_api_key', '' );
-        $has_packlink       = WCOTL_Packlink_Provider::is_packlink_plugin_active() && (bool) get_option( 'wcotl_packlink_api_key', '' );
-        $has_fedex          = (bool) ( get_option( 'wcotl_fedex_client_id', '' ) && get_option( 'wcotl_fedex_client_secret', '' ) );
+        $has_packlink       = WCOTL_Packlink_Provider::is_packlink_plugin_active() && ! empty( get_option( 'wcotl_packlink_api_key', '' ) );
+        $has_fedex          = ! empty( get_option( 'wcotl_fedex_client_id', '' ) ) && ! empty( get_option( 'wcotl_fedex_client_secret', '' ) );
         $any_provider       = $has_17track || $has_track123 || $has_packlink || $has_fedex;
 
         $available_providers = [];
@@ -1655,11 +1663,11 @@ class WCOTL_Admin {
                     <!-- Auto-Tracking Integration Section -->
                     <div style="background:#f9f9f9;border:1px solid #e5e5e5;padding:12px 14px;border-radius:4px;margin-bottom:18px;">
                         <label style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;cursor:pointer;">
-                            <input type="checkbox" id="enable_auto_sync" name="enable_auto_sync" value="1" <?php checked( $any_provider && (bool) $default_auto_ref ); ?> onchange="wcotlToggleAutoSyncBox()">
+                            <input type="checkbox" id="enable_auto_sync" name="enable_auto_sync" value="1" <?php checked( $any_provider && $default_auto_ref ); ?> onchange="wcotlToggleAutoSyncBox()">
                             <span><span class="dashicons dashicons-share-alt" style="font-size:16px;width:16px;height:16px;vertical-align:text-bottom;"></span> Automatically sync tracking updates (Auto-Tracking)</span>
                         </label>
 
-                        <div id="wcotl-auto-sync-fields" style="<?php echo ( $any_provider && (bool) $default_auto_ref ) ? '' : 'display:none;'; ?>margin-top:12px;">
+                        <div id="wcotl-auto-sync-fields" style="<?php echo ( $any_provider && $default_auto_ref ) ? '' : 'display:none;'; ?>margin-top:12px;">
                             <?php if ( ! empty( $available_providers ) ) : ?>
                                 <div class="wcotl-form-row">
                                     <label for="auto_provider">Provider</label>

@@ -253,12 +253,12 @@ class WCOTL_DB {
         }
 
         if ( array_key_exists( $order_id, self::$delivered_at_cache ) ) {
-            return self::$delivered_at_cache[ $order_id ] ? self::$delivered_at_cache[ $order_id ] : null;
+            return self::$delivered_at_cache[ $order_id ] ?: null;
         }
 
         self::prime_delivered_at_cache( array( $order_id ) );
 
-        return self::$delivered_at_cache[ $order_id ] ? self::$delivered_at_cache[ $order_id ] : null;
+        return self::$delivered_at_cache[ $order_id ] ?: null;
     }
 
     public static function clear_order_tracking_codes_cache( $order_id = null ): void {

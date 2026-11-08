@@ -256,7 +256,7 @@ class WCOTL_Paccofacile_Provider {
             $services = $data['data']['services_available'];
         } elseif ( isset( $data['services_available'] ) && is_array( $data['services_available'] ) ) {
             $services = $data['services_available'];
-        } elseif ( isset( $data['data'] ) && is_array( $data['data'] ) && isset( $data['data'][0] ) ) {
+        } elseif ( isset( $data['data'][0] ) && is_array( $data['data'] ) ) {
             $services = $data['data'];
         }
 
