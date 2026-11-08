@@ -452,19 +452,19 @@ class WCOTL_Rate_Comparator {
                             </div>
                             <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px;">
                                 <div>
-                                    <label style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'City', 'wc-order-timeline' ); ?></label>
+                                    <label for="wcotl-rate-orig-city" style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'City', 'wc-order-timeline' ); ?></label>
                                     <input type="text" id="wcotl-rate-orig-city" style="width:100%;font-size:12px;padding:3px 6px;">
                                 </div>
                                 <div>
-                                    <label style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'Postcode', 'wc-order-timeline' ); ?></label>
+                                    <label for="wcotl-rate-orig-postcode" style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'Postcode', 'wc-order-timeline' ); ?></label>
                                     <input type="text" id="wcotl-rate-orig-postcode" style="width:100%;font-size:12px;padding:3px 6px;">
                                 </div>
                                 <div>
-                                    <label style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'Prov', 'wc-order-timeline' ); ?></label>
+                                    <label for="wcotl-rate-orig-state" style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'Prov', 'wc-order-timeline' ); ?></label>
                                     <input type="text" id="wcotl-rate-orig-state" style="width:100%;font-size:12px;padding:3px 6px;" maxlength="4" placeholder="RM">
                                 </div>
                                 <div>
-                                    <label style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'Country', 'wc-order-timeline' ); ?></label>
+                                    <label for="wcotl-rate-orig-country" style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'Country', 'wc-order-timeline' ); ?></label>
                                     <input type="text" id="wcotl-rate-orig-country" style="width:100%;font-size:12px;padding:3px 6px;" maxlength="2" placeholder="IT">
                                 </div>
                             </div>
@@ -478,19 +478,19 @@ class WCOTL_Rate_Comparator {
                             </div>
                             <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px;">
                                 <div>
-                                    <label style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'City', 'wc-order-timeline' ); ?></label>
+                                    <label for="wcotl-rate-dest-city" style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'City', 'wc-order-timeline' ); ?></label>
                                     <input type="text" id="wcotl-rate-dest-city" style="width:100%;font-size:12px;padding:3px 6px;">
                                 </div>
                                 <div>
-                                    <label style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'Postcode', 'wc-order-timeline' ); ?></label>
+                                    <label for="wcotl-rate-dest-postcode" style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'Postcode', 'wc-order-timeline' ); ?></label>
                                     <input type="text" id="wcotl-rate-dest-postcode" style="width:100%;font-size:12px;padding:3px 6px;">
                                 </div>
                                 <div>
-                                    <label style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'Prov', 'wc-order-timeline' ); ?></label>
+                                    <label for="wcotl-rate-dest-state" style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'Prov', 'wc-order-timeline' ); ?></label>
                                     <input type="text" id="wcotl-rate-dest-state" style="width:100%;font-size:12px;padding:3px 6px;" maxlength="4" placeholder="MI">
                                 </div>
                                 <div>
-                                    <label style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'Country', 'wc-order-timeline' ); ?></label>
+                                    <label for="wcotl-rate-dest-country" style="font-size:11px;color:#646970;display:block;margin-bottom:2px;"><?php esc_html_e( 'Country', 'wc-order-timeline' ); ?></label>
                                     <input type="text" id="wcotl-rate-dest-country" style="width:100%;font-size:12px;padding:3px 6px;" maxlength="2" placeholder="IT">
                                 </div>
                             </div>

@@ -549,14 +549,14 @@ class WCOTL_Admin {
                 <?php wp_nonce_field( 'wcotl_save_order_id_' . $code, '_wpnonce_order_id' ); ?>
                 <input type="hidden" name="wcotl_save_order_id" value="1">
                 <div class="wcotl-form-row" style="margin-bottom:0;width:400px;">
-                    <label>Order number (WooCommerce ID)
+                    <label for="wcotl_order_id_input">Order number (WooCommerce ID)
                         <span class="dashicons dashicons-info tooltip">
                             <span class="tooltiptext">
                                 The order associated with this tracking code will be automatically used for all steps.
                             </span>
                         </span>
                     </label>
-                    <input type="text" name="order_id"
+                    <input type="text" id="wcotl_order_id_input" name="order_id"
                            value="<?php echo $order_id ?: ''; ?>"
                            placeholder="e.g. 1042">
                 </div>
@@ -575,14 +575,14 @@ class WCOTL_Admin {
                 <?php wp_nonce_field( 'wcotl_save_delivery_' . $code, '_wpnonce_delivery' ); ?>
                 <input type="hidden" name="wcotl_save_delivery" value="1">
                 <div class="wcotl-form-row" style="margin-bottom:0;width:400px;">
-                    <label>Estimated date (optional)
+                    <label for="wcotl_estimated_delivery_input">Estimated date (optional)
                         <span class="dashicons dashicons-info tooltip">
                             <span class="tooltiptext">
                                 Visible to the customer on the tracking page. Leave blank to hide.
                             </span>
                         </span>
                     </label>
-                    <input type="date" name="estimated_delivery"
+                    <input type="date" id="wcotl_estimated_delivery_input" name="estimated_delivery"
                            value="<?php echo esc_attr( $estimated_delivery ?: '' ); ?>">
                 </div>
                 <button type="submit" class="button button-primary">
@@ -600,7 +600,7 @@ class WCOTL_Admin {
                 <?php wp_nonce_field( 'wcotl_save_delivered_' . $code, '_wpnonce_delivered' ); ?>
                 <input type="hidden" name="wcotl_save_delivered" value="1">
                 <div class="wcotl-form-row" style="margin-bottom:0;width:400px;">
-                    <label>
+                    <label for="wcotl_delivered_at_input">
                         Actual delivery date (optional)
                         <span class="dashicons dashicons-info tooltip">
                             <span class="tooltiptext">
@@ -608,7 +608,7 @@ class WCOTL_Admin {
                             </span>
                         </span>
                     </label>
-                    <input type="date" name="delivered_at"
+                    <input type="date" id="wcotl_delivered_at_input" name="delivered_at"
                            value="<?php echo esc_attr( $delivered_at ?: '' ); ?>">
                 </div>
                 <button type="submit" class="button button-primary">
@@ -713,7 +713,7 @@ class WCOTL_Admin {
                 <?php if ( count( $available_providers ) > 1 ) : ?>
                 <!-- Show provider selector when multiple providers are configured -->
                 <div class="wcotl-form-row" style="margin-bottom:0;min-width:240px;">
-                    <label>Provider</label>
+                    <label for="wcotl-provider-select">Provider</label>
                     <select id="wcotl-provider-select" onchange="wcotlOnProviderChange()">
                         <?php foreach ( $available_providers as $p_slug => $p_name ) : 
                             $q_suffix = '';
@@ -744,7 +744,7 @@ class WCOTL_Admin {
                 <?php endif; ?>
 
                 <div class="wcotl-form-row" style="margin-bottom:0;width:260px;">
-                    <label id="wcotl-real-number-label">
+                    <label id="wcotl-real-number-label" for="wcotl-real-number">
                         <?php if ( $at_provider === 'packlink' ) : ?>
                             Packlink Shipment Reference
                         <?php elseif ( $at_provider === 'fedex' ) : ?>
@@ -784,7 +784,7 @@ class WCOTL_Admin {
 
                 <!-- Carrier selector: relevant for 17TRACK and Track123 -->
                 <div id="wcotl-carrier-row" class="wcotl-form-row" style="margin-bottom:0;width:260px;<?php echo ( $at_provider === 'packlink' || $at_provider === 'fedex' ) ? 'display:none;' : ''; ?>">
-                    <label>Carrier
+                    <label for="wcotl-carrier-select">Carrier
                         <span class="dashicons dashicons-info tooltip">
                             <span class="tooltiptext" id="wcotl-carrier-tip">
                                 <?php if ( $at_provider === 'track123' ) : ?>
@@ -829,7 +829,10 @@ class WCOTL_Admin {
                     <button class="button button-small" onclick="wcotlHideManualCarrier()" style="padding:0 6px;min-height:24px;line-height:22px;">✕</button>
                 </div>
                 <input type="text" id="wcotl-carrier-search"
+                       aria-label="Search carrier name or code"
                        placeholder="Type carrier name or code (e.g. UPS, 100002)…"
+                       style="width:100%;box-sizing:border-box;margin-bottom:6px;"
+                       autocomplete="off">
                        style="width:100%;box-sizing:border-box;margin-bottom:6px;"
                        autocomplete="off">
                 <div id="wcotl-carrier-results"
@@ -1356,22 +1359,22 @@ class WCOTL_Admin {
                                 <input type="hidden" name="_wpnonce_edit" value="<?php echo esc_attr($edit_nonce); ?>">
                                 <input type="hidden" name="step_id" value="<?php echo $s->id; ?>">
                                 <div class="wcotl-form-row">
-                                    <label>Date and Time <span style="color:#c0392b">*</span></label>
-                                    <input type="datetime-local" name="step_date"
+                                    <label for="wcotl_edit_step_date_<?php echo $s->id; ?>">Date and Time <span style="color:#c0392b">*</span></label>
+                                    <input type="datetime-local" id="wcotl_edit_step_date_<?php echo $s->id; ?>" name="step_date"
                                            value="<?php echo esc_attr($input_date_val); ?>" required>
                                 </div>
                                 <div class="wcotl-form-row">
-                                    <label>Step description <span style="color:#c0392b">*</span></label>
-                                    <input type="text" name="step_label"
+                                    <label for="wcotl_edit_step_label_<?php echo $s->id; ?>">Step description <span style="color:#c0392b">*</span></label>
+                                    <input type="text" id="wcotl_edit_step_label_<?php echo $s->id; ?>" name="step_label"
                                            value="<?php echo esc_attr($s->step_label); ?>" required>
                                 </div>
                                 <div class="wcotl-form-row">
-                                    <label>Additional note (optional)</label>
-                                    <textarea name="step_note"><?php echo esc_textarea($s->step_note); ?></textarea>
+                                    <label for="wcotl_edit_step_note_<?php echo $s->id; ?>">Additional note (optional)</label>
+                                    <textarea id="wcotl_edit_step_note_<?php echo $s->id; ?>" name="step_note"><?php echo esc_textarea($s->step_note); ?></textarea>
                                 </div>
                                 <div class="wcotl-form-row">
-                                    <label>Icon</label>
-                                    <select name="step_icon">
+                                    <label for="wcotl_edit_step_icon_<?php echo $s->id; ?>">Icon</label>
+                                    <select id="wcotl_edit_step_icon_<?php echo $s->id; ?>" name="step_icon">
                                         <?php foreach ( array_keys($icons) as $k ) : ?>
                                             <option value="<?php echo esc_attr($k); ?>" <?php selected($k, $s->step_icon); ?>>
                                                 <?php echo esc_html(ucfirst(str_replace('_',' ',$k))); ?>
@@ -1395,8 +1398,8 @@ class WCOTL_Admin {
                                 <input type="hidden" name="_wpnonce_void" value="<?php echo esc_attr($void_reason_nonce); ?>">
                                 <input type="hidden" name="step_id" value="<?php echo $s->id; ?>">
                                 <div class="wcotl-form-row">
-                                    <label>Reason (visible to customer, optional)</label>
-                                    <textarea name="step_void_reason" placeholder="e.g. Incorrect information provided by carrier. Shipment is still in transit."><?php echo esc_textarea( $s->step_void_reason ?? '' ); ?></textarea>
+                                    <label for="wcotl_step_void_reason_<?php echo $s->id; ?>">Reason (visible to customer, optional)</label>
+                                    <textarea id="wcotl_step_void_reason_<?php echo $s->id; ?>" name="step_void_reason" placeholder="e.g. Incorrect information provided by carrier. Shipment is still in transit."><?php echo esc_textarea( $s->step_void_reason ?? '' ); ?></textarea>
                                 </div>
                                 <div style="display:flex;gap:8px;">
                                     <button type="submit" class="button button-link-delete button-small"><?php esc_html_e( 'Confirm cancellation', 'wc-order-timeline' ); ?></button>
@@ -1441,7 +1444,7 @@ class WCOTL_Admin {
 
                     <?php $presets = WCOTL_DB::get_presets(); if ( ! empty( $presets ) ) : ?>
                     <div class="wcotl-form-row" style="background:#fcf9e8;border:1px solid #f0c060;border-radius:4px;padding:10px 14px;margin-bottom:16px;">
-                        <label style="color:#9a6e1a;">⚡ Use a preset</label>
+                        <label for="wcotl-preset-select" style="color:#9a6e1a;">⚡ Use a preset</label>
                         <select id="wcotl-preset-select" style="background:#fff;">
                             <option value="">— select preset —</option>
                             <?php foreach ( $presets as $p ) : ?>

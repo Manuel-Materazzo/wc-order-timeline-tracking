@@ -204,25 +204,25 @@ class WCOTL_Admin_Presets {
                         <?php endif; ?>
 
                         <div class="wcotl-form-row">
-                            <label>Preset Name <span style="color:#d63638">*</span></label>
-                            <input type="text" name="preset_name"
+                            <label for="preset_name">Preset Name <span style="color:#d63638">*</span></label>
+                            <input type="text" id="preset_name" name="preset_name"
                                    value="<?php echo esc_attr( $edit_row ? $edit_row->preset_name : '' ); ?>"
                                    placeholder="e.g. Departed Milan Warehouse" required>
                             <small style="font-size:11px;color:#646970;display:block;margin-top:2px;">Internal name, not visible to customer.</small>
                         </div>
                         <div class="wcotl-form-row">
-                            <label>Step Description <span style="color:#d63638">*</span></label>
-                            <input type="text" name="step_label"
+                            <label for="step_label">Step Description <span style="color:#d63638">*</span></label>
+                            <input type="text" id="step_label" name="step_label"
                                    value="<?php echo esc_attr( $edit_row ? $edit_row->step_label : '' ); ?>"
                                    placeholder="e.g. Goods loaded in Milan" required>
                         </div>
                         <div class="wcotl-form-row">
-                            <label>Note (optional)</label>
-                            <textarea name="step_note" placeholder="Additional details..."><?php echo esc_textarea( $edit_row ? $edit_row->step_note : '' ); ?></textarea>
+                            <label for="step_note">Note (optional)</label>
+                            <textarea id="step_note" name="step_note" placeholder="Additional details..."><?php echo esc_textarea( $edit_row ? $edit_row->step_note : '' ); ?></textarea>
                         </div>
                         <div class="wcotl-form-row">
-                            <label>Icon</label>
-                            <select name="step_icon">
+                            <label for="step_icon">Icon</label>
+                            <select id="step_icon" name="step_icon">
                                 <?php foreach ( array_keys( $icons ) as $k ) : ?>
                                     <option value="<?php echo esc_attr( $k ); ?>"
                                         <?php selected( $edit_row ? $edit_row->step_icon : 'truck', $k ); ?>>
@@ -232,8 +232,8 @@ class WCOTL_Admin_Presets {
                             </select>
                         </div>
                         <div class="wcotl-form-row">
-                            <label>Sort Order</label>
-                            <input type="number" name="sort_order" min="0"
+                            <label for="sort_order">Sort Order</label>
+                            <input type="number" id="sort_order" name="sort_order" min="0"
                                    value="<?php echo esc_attr( $edit_row ? $edit_row->sort_order : 0 ); ?>"
                                    style="width:100px;">
                             <small style="font-size:11px;color:#646970;display:block;margin-top:2px;">Lower numbers appear first in the selector.</small>
