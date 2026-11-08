@@ -28,6 +28,7 @@ if ( ! empty( $delete_data ) ) {
     // Delete plugin options
     delete_option( 'wcotl_db_version' );
     delete_option( 'wcotl_17track_api_key' );
+    delete_option( 'wcotl_track123_api_key' );
     delete_option( 'wcotl_packlink_api_key' );
     delete_option( 'wcotl_fedex_client_id' );
     delete_option( 'wcotl_fedex_client_secret' );
@@ -38,4 +39,12 @@ if ( ! empty( $delete_data ) ) {
     delete_option( 'wcotl_turnstile_site_key' );
     delete_option( 'wcotl_turnstile_secret_key' );
     delete_option( 'wcotl_rate_limit_max_requests' );
+    delete_option( 'wcotl_paccofacile_account_number' );
+    delete_option( 'wcotl_paccofacile_api_key' );
+    delete_option( 'wcotl_paccofacile_token' );
+    delete_option( 'wcotl_paccofacile_environment' );
+    delete_option( 'wcotl_default_package_weight' );
+    delete_option( 'wcotl_default_package_length' );
+    delete_option( 'wcotl_default_package_width' );
+    delete_option( 'wcotl_default_package_height' );
 }

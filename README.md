@@ -63,11 +63,23 @@ When a user visits the page, they can enter their tracking code into the search 
 
 ---
 
+## ⚙️ Settings & Tab Organization
+
+The settings dashboard is neatly organized into five focused tabs (**Timeline Tracking > ⚙ Settings**):
+
+1. **🚚 Tracking Providers**: Configure API keys, client credentials, and environments for 17TRACK, Track123 (with live quota refresh), Packlink PRO, and FedEx REST.
+2. **🔄 Auto-Sync Engine**: Configure global background WP-Cron sync interval and inactivity timeout thresholds, plus review automated milestone rules.
+3. **⚖️ Rate Comparator**: Configure Paccofacile.it API credentials, review Packlink quoting status, and set default fallback package dimensions.
+4. **🛡️ Security & Protection**: Configure Cloudflare Turnstile and frontend IP rate limiting to prevent tracking search scraping.
+5. **🗄️ General & System**: Configure data retention preferences on uninstall, view system diagnostics/table health, and copy the tracking shortcode.
+
+---
+
 ## ⚙️ 17TRACK Integration & Auto-Sync
 
-1. Navigate to **Timeline Tracking > ⚙ Settings**.
+1. Navigate to **Timeline Tracking > ⚙ Settings > Tracking Providers**.
 2. Input your **17TRACK API Key**.
-3. Set your desired **Sync Interval** (in hours) and **Inactivity Threshold** (in days).
+3. Under the **Auto-Sync Engine** tab, set your desired global **Sync Interval** (in hours) and **Inactivity Threshold** (in days).
 4. Save settings. The plugin will automatically schedule background WP-Cron jobs (`wcotl_auto_sync`) to query 17TRACK for active shipments and add new tracking steps seamlessly.
 
 ---
@@ -77,8 +89,8 @@ When a user visits the page, they can enter their tracking code into the search 
 Track123 automated tracking connects to the [Track123 REST API v2.1](https://docs.track123.com/reference/request) to support over 1,700 couriers worldwide with multi-carrier checkpoint synchronization and carrier auto-detection.
 
 1. Obtain your API Key from the [Track123 Admin Portal](https://member.track123.com/dashboard) under **Developers > API**.
-2. Navigate to **Timeline Tracking > ⚙ Settings**.
-3. In the **Track123 API** section, enter your **Track123 API Key / Secret** and click **Save Track123 Settings**.
+2. Navigate to **Timeline Tracking > ⚙ Settings > Tracking Providers**.
+3. In the **Track123 API** section, enter your **Track123 API Key / Secret** and click **Save Tracking Providers**.
 4. On any tracking code detail screen, select **Track123** as the provider and enter the carrier tracking number (e.g. `9400111899223857481234`).
 5. Optionally click **🔍 Detect carrier** to let Track123 detect the carrier, or select a courier from the search panel. Leave as "Auto-detect" to let Track123 detect the courier automatically during registration.
 6. The background cron job handles registering the shipment, querying tracking updates, deduplicating milestones, and inserting timeline steps automatically.
@@ -90,7 +102,7 @@ Track123 automated tracking connects to the [Track123 REST API v2.1](https://doc
 Packlink PRO tracking is available **only when the [Packlink PRO Shipping for WooCommerce](https://wordpress.org/plugins/packlink-pro-shipping/) plugin is installed and active**. Unlike 17TRACK and Track123, Packlink tracks by its own **Shipment Reference** (e.g. `ESXXXXXXXXXXXXXX`) — no carrier code is required.
 
 1. Ensure the **Packlink PRO Shipping** plugin is installed and active.
-2. Navigate to **Timeline Tracking > ⚙ Settings**.
+2. Navigate to **Timeline Tracking > ⚙ Settings > Tracking Providers**.
 3. Input your **Packlink PRO API Key** (obtain it from your Packlink PRO dashboard under **Settings → Packlink PRO API**).
 4. Save settings.
 5. **Order Page & Auto-Import Prefill**:
@@ -106,7 +118,7 @@ Packlink PRO tracking is available **only when the [Packlink PRO Shipping for Wo
 FedEx automated tracking connects directly to the [FedEx Track API](https://developer.fedex.com/wirc/browser/en-it/catalog/track/docs) via [FedEx OAuth 2.0 Authorization](https://developer.fedex.com/wirc/browser/en-it/catalog/authorization/docs).
 
 1. Create a project in the [FedEx Developer Portal](https://developer.fedex.com/) to obtain your **API Key (Client ID)** and **Secret Key (Client Secret)**.
-2. Navigate to **Timeline Tracking > ⚙ Settings**.
+2. Navigate to **Timeline Tracking > ⚙ Settings > Tracking Providers**.
 3. In the **FedEx API** section:
    - Enter your **FedEx API Key / Client ID**.
    - Enter your **FedEx Secret Key / Client Secret**.
@@ -122,8 +134,8 @@ FedEx automated tracking connects directly to the [FedEx Track API](https://deve
 When fulfilling WooCommerce orders, courier shipping costs can vary between Packlink PRO and Paccofacile.it. WC Order Timeline Tracking provides a live quote comparison directly on the order details screen:
 
 1. **Configuration**:
-   - In **Timeline Tracking > ⚙ Settings**, configure your **Packlink PRO API Key**.
-   - Under **Paccofacile.it API**, input your **Account Number**, **API Key**, and **Bearer Token** (or let it auto-detect from the official *Paccofacile for WooCommerce* plugin if active).
+   - In **Timeline Tracking > ⚙ Settings > Rate Comparator**, configure your **Paccofacile.it API** credentials (**Account Number**, **API Key**, and **Bearer Token**, or let it auto-detect from the official *Paccofacile for WooCommerce* plugin if active).
+   - Verify that your **Packlink PRO API Key** is configured in **Tracking Providers**.
    - Set fallback default package dimensions and weight.
 2. **Order Rate Comparison**:
    - On any WooCommerce Order screen, locate the **Timeline Tracking** meta box in the sidebar.

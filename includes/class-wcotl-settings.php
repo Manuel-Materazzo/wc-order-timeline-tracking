@@ -1,12 +1,13 @@
 <?php
 /**
- * Plugin Settings page
+ * Plugin Settings Page
  *
- * Adds a "Impostazioni" submenu under the Timeline Tracking menu,
- * allowing admins to configure:
- *   - 17TRACK API key
- *   - Sync interval (hours)
- *   - Inactivity threshold (days before stopping auto-tracking)
+ * Provides a modern, tabbed administrative settings interface for:
+ *   - Tracking Providers (17TRACK, Track123, Packlink PRO, FedEx)
+ *   - Auto-Sync Engine (Cron interval, inactivity threshold, automation rules)
+ *   - Shipping Rate Comparator (Packlink PRO vs Paccofacile.it, fallback parcel dimensions)
+ *   - Security & Anti-Scraping (Cloudflare Turnstile, IP rate limiting)
+ *   - General & System (Uninstall data retention, health diagnostics, shortcode reference)
  */
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -18,6 +19,7 @@ class WCOTL_Settings {
         add_action( 'admin_menu',    [ __CLASS__, 'register_menu' ] );
         add_action( 'admin_init',    [ __CLASS__, 'register_settings' ] );
         add_action( 'admin_post_wcotl_save_settings', [ __CLASS__, 'save_settings' ] );
+
         // AJAX: carrier auto-detect
         add_action( 'wp_ajax_wcotl_detect_carriers',  [ __CLASS__, 'ajax_detect_carriers' ] );
         // AJAX: fetch Track123 courier list
@@ -43,8 +45,8 @@ class WCOTL_Settings {
     public static function register_menu(): void {
         add_submenu_page(
             'wcotl-tracking',
-            'Tracking Settings',
-            '⚙ Settings',
+            __( 'Tracking Settings', 'wc-order-timeline' ),
+            __( '⚙ Settings', 'wc-order-timeline' ),
             'manage_woocommerce',
             'wcotl-settings',
             [ __CLASS__, 'page' ]
@@ -52,7 +54,7 @@ class WCOTL_Settings {
     }
 
     /* ------------------------------------------------------------------
-     * Settings registration (used only for nonce / sanitise wiring)
+     * Settings registration (used for sanitization wiring)
      * ------------------------------------------------------------------ */
 
     public static function register_settings(): void {
@@ -79,18 +81,24 @@ class WCOTL_Settings {
     }
 
     /* ------------------------------------------------------------------
-     * Save handler (custom form POST to avoid WP settings-api redirect quirks)
+     * Save handler
      * ------------------------------------------------------------------ */
 
     public static function save_settings(): void {
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
-            wp_die( 'Not allowed.' );
+            wp_die( esc_html__( 'Not allowed.', 'wc-order-timeline' ) );
         }
         check_admin_referer( 'wcotl_settings_nonce' );
 
+        $current_tab  = sanitize_key( $_POST['current_tab'] ?? 'providers' );
+        $allowed_tabs = [ 'providers', 'sync', 'rates', 'security', 'system' ];
+        if ( ! in_array( $current_tab, $allowed_tabs, true ) ) {
+            $current_tab = 'providers';
+        }
+
+        // --- Tracking Providers Tab ---
         if ( isset( $_POST['wcotl_17track_api_key'] ) ) {
-            $api_key = sanitize_text_field( wp_unslash( $_POST['wcotl_17track_api_key'] ) );
-            update_option( 'wcotl_17track_api_key', $api_key );
+            update_option( 'wcotl_17track_api_key', sanitize_text_field( wp_unslash( $_POST['wcotl_17track_api_key'] ) ) );
         }
         if ( isset( $_POST['wcotl_track123_api_key'] ) ) {
             $track123_key = sanitize_text_field( wp_unslash( $_POST['wcotl_track123_api_key'] ) );
@@ -98,22 +106,20 @@ class WCOTL_Settings {
             delete_transient( 'wcotl_track123_quota_' . md5( $track123_key ) );
         }
         if ( isset( $_POST['wcotl_packlink_api_key'] ) ) {
-            $packlink_key = sanitize_text_field( wp_unslash( $_POST['wcotl_packlink_api_key'] ) );
-            update_option( 'wcotl_packlink_api_key', $packlink_key );
+            update_option( 'wcotl_packlink_api_key', sanitize_text_field( wp_unslash( $_POST['wcotl_packlink_api_key'] ) ) );
         }
         if ( isset( $_POST['wcotl_fedex_client_id'] ) ) {
-            $fedex_client_id = sanitize_text_field( wp_unslash( $_POST['wcotl_fedex_client_id'] ) );
-            update_option( 'wcotl_fedex_client_id', $fedex_client_id );
+            update_option( 'wcotl_fedex_client_id', sanitize_text_field( wp_unslash( $_POST['wcotl_fedex_client_id'] ) ) );
         }
         if ( isset( $_POST['wcotl_fedex_client_secret'] ) ) {
-            $fedex_client_secret = sanitize_text_field( wp_unslash( $_POST['wcotl_fedex_client_secret'] ) );
-            update_option( 'wcotl_fedex_client_secret', $fedex_client_secret );
+            update_option( 'wcotl_fedex_client_secret', sanitize_text_field( wp_unslash( $_POST['wcotl_fedex_client_secret'] ) ) );
         }
         if ( isset( $_POST['wcotl_fedex_environment'] ) ) {
             $fedex_environment = sanitize_key( wp_unslash( $_POST['wcotl_fedex_environment'] ) );
-            $fedex_environment = ( $fedex_environment === 'sandbox' ) ? 'sandbox' : 'production';
-            update_option( 'wcotl_fedex_environment', $fedex_environment );
+            update_option( 'wcotl_fedex_environment', $fedex_environment === 'sandbox' ? 'sandbox' : 'production' );
         }
+
+        // --- Auto-Sync Engine Tab ---
         if ( isset( $_POST['wcotl_sync_interval'] ) ) {
             $interval = max( 1, absint( $_POST['wcotl_sync_interval'] ) );
             update_option( 'wcotl_sync_interval', $interval );
@@ -122,33 +128,16 @@ class WCOTL_Settings {
             $inactive = max( 1, absint( $_POST['wcotl_inactivity_days'] ) );
             update_option( 'wcotl_inactivity_days', $inactive );
         }
-        if ( isset( $_POST['wcotl_save_general_settings'] ) ) {
-            $delete_data = ! empty( $_POST['wcotl_delete_data_on_uninstall'] ) ? 1 : 0;
-            update_option( 'wcotl_delete_data_on_uninstall', $delete_data );
-        }
-        if ( isset( $_POST['wcotl_turnstile_site_key'] ) ) {
-            $turnstile_site = sanitize_text_field( wp_unslash( $_POST['wcotl_turnstile_site_key'] ) );
-            update_option( 'wcotl_turnstile_site_key', $turnstile_site );
-        }
-        if ( isset( $_POST['wcotl_turnstile_secret_key'] ) ) {
-            $turnstile_secret = sanitize_text_field( wp_unslash( $_POST['wcotl_turnstile_secret_key'] ) );
-            update_option( 'wcotl_turnstile_secret_key', $turnstile_secret );
-        }
-        if ( isset( $_POST['wcotl_rate_limit_max_requests'] ) ) {
-            $rate_limit_max = max( 1, absint( $_POST['wcotl_rate_limit_max_requests'] ) );
-            update_option( 'wcotl_rate_limit_max_requests', $rate_limit_max );
-        }
+
+        // --- Rate Comparator Tab ---
         if ( isset( $_POST['wcotl_paccofacile_account_number'] ) ) {
-            $acc = sanitize_text_field( wp_unslash( $_POST['wcotl_paccofacile_account_number'] ) );
-            update_option( 'wcotl_paccofacile_account_number', $acc );
+            update_option( 'wcotl_paccofacile_account_number', sanitize_text_field( wp_unslash( $_POST['wcotl_paccofacile_account_number'] ) ) );
         }
         if ( isset( $_POST['wcotl_paccofacile_api_key'] ) ) {
-            $key = sanitize_text_field( wp_unslash( $_POST['wcotl_paccofacile_api_key'] ) );
-            update_option( 'wcotl_paccofacile_api_key', $key );
+            update_option( 'wcotl_paccofacile_api_key', sanitize_text_field( wp_unslash( $_POST['wcotl_paccofacile_api_key'] ) ) );
         }
         if ( isset( $_POST['wcotl_paccofacile_token'] ) ) {
-            $token = sanitize_text_field( wp_unslash( $_POST['wcotl_paccofacile_token'] ) );
-            update_option( 'wcotl_paccofacile_token', $token );
+            update_option( 'wcotl_paccofacile_token', sanitize_text_field( wp_unslash( $_POST['wcotl_paccofacile_token'] ) ) );
         }
         if ( isset( $_POST['wcotl_paccofacile_environment'] ) ) {
             $pacco_env = sanitize_key( wp_unslash( $_POST['wcotl_paccofacile_environment'] ) );
@@ -163,26 +152,45 @@ class WCOTL_Settings {
             update_option( 'wcotl_default_package_length', $def_l );
         }
         if ( isset( $_POST['wcotl_default_package_width'] ) ) {
-            $def_width = max( 1, absint( $_POST['wcotl_default_package_width'] ) );
-            update_option( 'wcotl_default_package_width', $def_width );
+            $def_w_dim = max( 1, absint( $_POST['wcotl_default_package_width'] ) );
+            update_option( 'wcotl_default_package_width', $def_w_dim );
         }
         if ( isset( $_POST['wcotl_default_package_height'] ) ) {
             $def_h = max( 1, absint( $_POST['wcotl_default_package_height'] ) );
             update_option( 'wcotl_default_package_height', $def_h );
         }
 
-        wp_redirect( admin_url( 'admin.php?page=wcotl-settings&saved=1' ) );
+        // --- Security & Anti-Scraping Tab ---
+        if ( isset( $_POST['wcotl_turnstile_site_key'] ) ) {
+            update_option( 'wcotl_turnstile_site_key', sanitize_text_field( wp_unslash( $_POST['wcotl_turnstile_site_key'] ) ) );
+        }
+        if ( isset( $_POST['wcotl_turnstile_secret_key'] ) ) {
+            update_option( 'wcotl_turnstile_secret_key', sanitize_text_field( wp_unslash( $_POST['wcotl_turnstile_secret_key'] ) ) );
+        }
+        if ( isset( $_POST['wcotl_rate_limit_max_requests'] ) ) {
+            $rate_limit_max = max( 1, absint( $_POST['wcotl_rate_limit_max_requests'] ) );
+            update_option( 'wcotl_rate_limit_max_requests', $rate_limit_max );
+        }
+
+        // --- General & System Tab ---
+        if ( isset( $_POST['wcotl_save_system_settings'] ) || isset( $_POST['wcotl_save_general_settings'] ) || $current_tab === 'system' ) {
+            $delete_data = ! empty( $_POST['wcotl_delete_data_on_uninstall'] ) ? 1 : 0;
+            update_option( 'wcotl_delete_data_on_uninstall', $delete_data );
+        }
+
+        $redirect_url = admin_url( 'admin.php?page=wcotl-settings&tab=' . $current_tab . '&saved=1' );
+        wp_redirect( $redirect_url );
         exit;
     }
 
     /* ------------------------------------------------------------------
-     * AJAX: detect carriers for a real tracking number
+     * AJAX Endpoints
      * ------------------------------------------------------------------ */
 
     public static function ajax_detect_carriers(): void {
         check_ajax_referer( 'wcotl_admin_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
-            wp_send_json_error( 'Not allowed.' );
+            wp_send_json_error( __( 'Not allowed.', 'wc-order-timeline' ) );
         }
 
         $number        = sanitize_text_field( wp_unslash( $_POST['number'] ?? '' ) );
@@ -195,40 +203,32 @@ class WCOTL_Settings {
         };
 
         if ( ! $provider ) {
-            wp_send_json_error( 'No API key configured for the selected provider.' );
+            wp_send_json_error( __( 'No API key configured for the selected provider.', 'wc-order-timeline' ) );
         }
 
         $carriers = $provider->detect_carriers( $number );
         wp_send_json_success( $carriers );
     }
 
-    /* ------------------------------------------------------------------
-     * AJAX: fetch Track123 supported courier list for manual search
-     * ------------------------------------------------------------------ */
-
     public static function ajax_get_track123_carriers(): void {
         check_ajax_referer( 'wcotl_admin_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
-            wp_send_json_error( 'Not allowed.' );
+            wp_send_json_error( __( 'Not allowed.', 'wc-order-timeline' ) );
         }
 
         $provider = WCOTL_Auto_Sync::get_track123_provider();
         if ( ! $provider ) {
-            wp_send_json_error( 'Track123 API is not configured.' );
+            wp_send_json_error( __( 'Track123 API is not configured.', 'wc-order-timeline' ) );
         }
 
         $carriers = $provider->get_courier_list();
         wp_send_json_success( $carriers );
     }
 
-    /* ------------------------------------------------------------------
-     * AJAX: fetch provider quota and balance
-     * ------------------------------------------------------------------ */
-
     public static function ajax_get_provider_quota(): void {
         check_ajax_referer( 'wcotl_admin_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
-            wp_send_json_error( 'Not allowed.' );
+            wp_send_json_error( __( 'Not allowed.', 'wc-order-timeline' ) );
         }
 
         $provider_slug = sanitize_key( $_POST['provider'] ?? 'track123' );
@@ -236,28 +236,23 @@ class WCOTL_Settings {
 
         $provider = WCOTL_Auto_Sync::get_provider_by_slug( $provider_slug );
         if ( ! $provider || ! $provider->is_configured() ) {
-            wp_send_json_error( 'Provider is not configured.' );
+            wp_send_json_error( __( 'Provider is not configured.', 'wc-order-timeline' ) );
         }
 
         $quota = $provider->get_quota( $force_refresh );
         wp_send_json_success( $quota );
     }
 
-    /* ------------------------------------------------------------------
-     * AJAX: save real tracking number + carrier for a plugin tracking code
-     * ------------------------------------------------------------------ */
-
     public static function ajax_save_auto_tracking(): void {
         check_ajax_referer( 'wcotl_admin_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
-            wp_send_json_error( 'Not allowed.' );
+            wp_send_json_error( __( 'Not allowed.', 'wc-order-timeline' ) );
         }
 
         $tracking_code = sanitize_text_field( wp_unslash( $_POST['tracking_code'] ?? '' ) );
         $real_number   = sanitize_text_field( wp_unslash( $_POST['real_number'] ?? '' ) );
         $provider_slug = sanitize_key( $_POST['provider'] ?? '17track' );
 
-        // Validate provider slug.
         if ( ! in_array( $provider_slug, [ '17track', 'track123', 'packlink', 'fedex' ], true ) ) {
             $provider_slug = '17track';
         }
@@ -274,18 +269,16 @@ class WCOTL_Settings {
         }
 
         if ( ! $tracking_code ) {
-            wp_send_json_error( 'Missing tracking_code.' );
+            wp_send_json_error( __( 'Missing tracking code.', 'wc-order-timeline' ) );
         }
 
         global $wpdb;
         $table      = $wpdb->prefix . 'order_timeline';
         $meta_table = $wpdb->prefix . 'order_timeline_meta';
-        // A tracking code is valid if it has at least one step OR at least one meta row.
-        // Newly created codes (no steps yet) only exist in the meta table.
         $exists_in_steps = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM $table WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
         $exists_in_meta  = $exists_in_steps ? null : $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM $meta_table WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
         if ( ! $exists_in_steps && ! $exists_in_meta ) {
-            wp_send_json_error( 'Unknown tracking code.' );
+            wp_send_json_error( __( 'Unknown tracking code.', 'wc-order-timeline' ) );
         }
 
         if ( $real_number ) {
@@ -298,7 +291,6 @@ class WCOTL_Settings {
 
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_REAL_NUMBER,  $real_number );
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_PROVIDER,     $provider_slug );
-            // Carrier code is only meaningful for 17TRACK and Track123; clear it for Packlink and FedEx.
             if ( $provider_slug === 'packlink' || $provider_slug === 'fedex' ) {
                 WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_CARRIER_CODE, '' );
             } elseif ( $provider_slug === 'track123' ) {
@@ -307,36 +299,29 @@ class WCOTL_Settings {
                 WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_CARRIER_CODE, $carrier_code ?: '' );
             }
             if ( $changed ) {
-                // Reset registration so it re-registers at provider on next sync if details changed.
                 WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_REGISTERED,   '' );
                 WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_SYNC_STOPPED,  '' );
                 WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_STOP_REASON,   '' );
                 WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_LAST_STATUS,   '' );
             }
-            // Clear the cursor so this code is picked up on the very next cron tick.
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_NEXT_SYNC_AT,  '' );
         } else {
-            // Clearing the real number disables auto-tracking for this code.
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_REAL_NUMBER, '' );
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_PROVIDER,    '' );
         }
 
-        wp_send_json_success( 'Saved.' );
+        wp_send_json_success( __( 'Saved.', 'wc-order-timeline' ) );
     }
-
-    /* ------------------------------------------------------------------
-     * AJAX: force sync now for a single code
-     * ------------------------------------------------------------------ */
 
     public static function ajax_sync_now(): void {
         check_ajax_referer( 'wcotl_admin_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
-            wp_send_json_error( 'Not allowed.' );
+            wp_send_json_error( __( 'Not allowed.', 'wc-order-timeline' ) );
         }
 
         $tracking_code = sanitize_text_field( wp_unslash( $_POST['tracking_code'] ?? '' ) );
         if ( ! $tracking_code ) {
-            wp_send_json_error( 'Missing tracking_code.' );
+            wp_send_json_error( __( 'Missing tracking code.', 'wc-order-timeline' ) );
         }
 
         global $wpdb;
@@ -345,36 +330,30 @@ class WCOTL_Settings {
         $exists_in_steps = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM $table WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
         $exists_in_meta  = $exists_in_steps ? null : $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM $meta_table WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
         if ( ! $exists_in_steps && ! $exists_in_meta ) {
-            wp_send_json_error( 'Unknown tracking code.' );
+            wp_send_json_error( __( 'Unknown tracking code.', 'wc-order-timeline' ) );
         }
 
         $result = WCOTL_Auto_Sync::sync_code( $tracking_code );
 
         if ( $result['step'] !== 'complete' ) {
-            // Sync stopped before completing — surface the reason as a JSON error so the JS
-            // can show a proper diagnostic message instead of a silent "?".
             wp_send_json_error( [
                 'step'  => $result['step'],
-                'error' => $result['error'] ?? 'Unknown error.',
+                'error' => $result['error'] ?? __( 'Unknown error.', 'wc-order-timeline' ),
             ] );
         }
 
         wp_send_json_success( $result );
     }
 
-    /* ------------------------------------------------------------------
-     * AJAX: resume stopped sync
-     * ------------------------------------------------------------------ */
-
     public static function ajax_resume_sync(): void {
         check_ajax_referer( 'wcotl_admin_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
-            wp_send_json_error( 'Not allowed.' );
+            wp_send_json_error( __( 'Not allowed.', 'wc-order-timeline' ) );
         }
 
         $tracking_code = sanitize_text_field( wp_unslash( $_POST['tracking_code'] ?? '' ) );
         if ( ! $tracking_code ) {
-            wp_send_json_error( 'Missing tracking_code.' );
+            wp_send_json_error( __( 'Missing tracking code.', 'wc-order-timeline' ) );
         }
 
         global $wpdb;
@@ -383,39 +362,65 @@ class WCOTL_Settings {
         $exists_in_steps = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM $table WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
         $exists_in_meta  = $exists_in_steps ? null : $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM $meta_table WHERE tracking_code = %s LIMIT 1", $tracking_code ) );
         if ( ! $exists_in_steps && ! $exists_in_meta ) {
-            wp_send_json_error( 'Unknown tracking code.' );
+            wp_send_json_error( __( 'Unknown tracking code.', 'wc-order-timeline' ) );
         }
 
         WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_SYNC_STOPPED, '' );
         WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_STOP_REASON,  '' );
         WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_LAST_STATUS,  '' );
-        // Clear the cursor so the resumed code is picked up on the very next cron tick.
         WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_NEXT_SYNC_AT, '' );
 
-        wp_send_json_success( 'Sync resumed.' );
+        wp_send_json_success( __( 'Sync resumed.', 'wc-order-timeline' ) );
+    }
+
+    public static function ajax_set_uninstall_data_preference(): void {
+        check_ajax_referer( 'wcotl_uninstall_nonce', 'nonce' );
+        if ( ! current_user_can( 'delete_plugins' ) && ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( __( 'Not allowed.', 'wc-order-timeline' ) );
+        }
+
+        $delete_data = ! empty( $_POST['delete_data'] ) ? 1 : 0;
+        update_option( 'wcotl_delete_data_on_uninstall', $delete_data );
+
+        wp_send_json_success( [ 'delete_data' => $delete_data ] );
     }
 
     /* ------------------------------------------------------------------
-     * Settings page UI
+     * Settings Page UI
      * ------------------------------------------------------------------ */
 
     public static function page(): void {
-        $api_key                   = get_option( 'wcotl_17track_api_key', '' );
-        $track123_api_key          = get_option( 'wcotl_track123_api_key', '' );
-        $packlink_api_key          = get_option( 'wcotl_packlink_api_key', '' );
-        $fedex_client_id           = get_option( 'wcotl_fedex_client_id', '' );
-        $fedex_client_secret       = get_option( 'wcotl_fedex_client_secret', '' );
-        $fedex_environment         = get_option( 'wcotl_fedex_environment', 'production' );
-        $fedex_configured          = ( ! empty( $fedex_client_id ) && ! empty( $fedex_client_secret ) );
-        $sync_interval             = max( 1, (int) get_option( 'wcotl_sync_interval', 1 ) );
-        $inactivity_days           = max( 1, (int) get_option( 'wcotl_inactivity_days', 45 ) );
-        $delete_data_on_uninstall = (int) get_option( 'wcotl_delete_data_on_uninstall', 0 );
-        $saved                     = isset( $_GET['saved'] );
-        $next_sync                 = wp_next_scheduled( WCOTL_Auto_Sync::CRON_HOOK );
+        $allowed_tabs = [
+            'providers' => __( 'Tracking Providers', 'wc-order-timeline' ),
+            'sync'      => __( 'Auto-Sync Engine', 'wc-order-timeline' ),
+            'rates'     => __( 'Rate Comparator', 'wc-order-timeline' ),
+            'security'  => __( 'Security & Protection', 'wc-order-timeline' ),
+            'system'    => __( 'General & System', 'wc-order-timeline' ),
+        ];
 
-        // Check Packlink PRO plugin availability.
-        $packlink_plugin_active = WCOTL_Packlink_Provider::is_packlink_plugin_active();
+        $current_tab = isset( $_GET['tab'] ) && array_key_exists( $_GET['tab'], $allowed_tabs )
+            ? sanitize_key( $_GET['tab'] )
+            : 'providers';
 
+        $saved = isset( $_GET['saved'] );
+
+        // Providers data
+        $api_key              = get_option( 'wcotl_17track_api_key', '' );
+        $track123_api_key     = get_option( 'wcotl_track123_api_key', '' );
+        $packlink_api_key     = get_option( 'wcotl_packlink_api_key', '' );
+        $fedex_client_id      = get_option( 'wcotl_fedex_client_id', '' );
+        $fedex_client_secret  = get_option( 'wcotl_fedex_client_secret', '' );
+        $fedex_environment    = get_option( 'wcotl_fedex_environment', 'production' );
+        $fedex_configured     = ( ! empty( $fedex_client_id ) && ! empty( $fedex_client_secret ) );
+        $packlink_active      = WCOTL_Packlink_Provider::is_packlink_plugin_active();
+
+        // Auto-sync data
+        $sync_interval        = max( 1, (int) get_option( 'wcotl_sync_interval', 1 ) );
+        $inactivity_days      = max( 1, (int) get_option( 'wcotl_inactivity_days', 45 ) );
+        $next_sync            = wp_next_scheduled( WCOTL_Auto_Sync::CRON_HOOK );
+        $admin_email          = get_option( 'admin_email' );
+
+        // Rate comparator data
         $paccofacile_acc        = get_option( 'wcotl_paccofacile_account_number', '' );
         $paccofacile_key        = get_option( 'wcotl_paccofacile_api_key', '' );
         $paccofacile_token      = get_option( 'wcotl_paccofacile_token', '' );
@@ -423,456 +428,826 @@ class WCOTL_Settings {
         $paccofacile_prov       = new WCOTL_Paccofacile_Provider( $paccofacile_acc, $paccofacile_key, $paccofacile_token, $paccofacile_env );
         $paccofacile_configured = $paccofacile_prov->is_configured();
         $paccofacile_plugin     = WCOTL_Paccofacile_Provider::is_paccofacile_plugin_active();
-
         $default_package_weight = (float) get_option( 'wcotl_default_package_weight', 1.0 );
         $default_package_length = (int) get_option( 'wcotl_default_package_length', 20 );
         $default_package_width  = (int) get_option( 'wcotl_default_package_width', 20 );
         $default_package_height = (int) get_option( 'wcotl_default_package_height', 10 );
+
+        // Security data
+        $turnstile_site_key   = get_option( 'wcotl_turnstile_site_key', '' );
+        $turnstile_secret_key = get_option( 'wcotl_turnstile_secret_key', '' );
+        $rate_limit_max       = max( 1, (int) get_option( 'wcotl_rate_limit_max_requests', 15 ) );
+        $turnstile_configured = ( ! empty( $turnstile_site_key ) && ! empty( $turnstile_secret_key ) );
+
+        // System data
+        $delete_data_on_uninstall = (int) get_option( 'wcotl_delete_data_on_uninstall', 0 );
         ?>
 
-        <div class="wrap wcotl-admin">
+        <style>
+            .wcotl-settings-wrap { max-width: 1040px; margin-top: 15px; }
+            .wcotl-tab-content { margin-top: 20px; }
+            .wcotl-settings-card {
+                background: #fff;
+                border: 1px solid #ccd0d4;
+                border-radius: 6px;
+                padding: 22px 26px;
+                margin-bottom: 22px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            }
+            .wcotl-settings-card h2 {
+                margin: 0 0 8px 0;
+                font-size: 16px;
+                font-weight: 600;
+                color: #1d2327;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .wcotl-settings-card .card-description {
+                font-size: 13px;
+                color: #50575e;
+                margin-bottom: 18px;
+                line-height: 1.5;
+            }
+            .wcotl-badge-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                font-size: 11px;
+                font-weight: 600;
+                padding: 3px 8px;
+                border-radius: 12px;
+                line-height: 1.2;
+            }
+            .wcotl-badge-success { background: #edfaef; color: #008a20; border: 1px solid #b8e6bf; }
+            .wcotl-badge-warning { background: #fcf9e8; color: #9a6e1a; border: 1px solid #f0c060; }
+            .wcotl-badge-error   { background: #fcf0f1; color: #d63638; border: 1px solid #f5c2c7; }
+            .wcotl-badge-neutral { background: #f0f0f1; color: #646970; border: 1px solid #c3c4c7; }
+
+            .wcotl-status-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+                gap: 12px;
+                margin-bottom: 20px;
+            }
+            .wcotl-status-tile {
+                background: #fff;
+                border: 1px solid #ccd0d4;
+                border-radius: 6px;
+                padding: 12px 14px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+            }
+            .wcotl-status-tile .tile-title { font-size: 13px; font-weight: 600; color: #1d2327; }
+            .wcotl-status-tile .tile-sub   { font-size: 11px; color: #646970; margin-top: 2px; }
+
+            .wcotl-field-group { margin-bottom: 18px; }
+            .wcotl-field-group:last-child { margin-bottom: 0; }
+            .wcotl-field-group label.field-label {
+                display: block;
+                font-weight: 600;
+                font-size: 13px;
+                margin-bottom: 5px;
+                color: #1d2327;
+            }
+            .wcotl-field-help {
+                font-size: 12px;
+                color: #646970;
+                margin-top: 4px;
+                line-height: 1.4;
+            }
+            .wcotl-input-with-button { display: flex; gap: 8px; max-width: 580px; }
+            .wcotl-input-with-button input { flex: 1; font-family: monospace; }
+
+            .wcotl-notice-callout {
+                background: #f0f6fc;
+                border-left: 4px solid #2271b1;
+                padding: 10px 14px;
+                border-radius: 3px;
+                font-size: 12px;
+                color: #1d2327;
+                line-height: 1.5;
+                margin: 14px 0;
+            }
+            .wcotl-notice-callout.warning {
+                background: #fff8e5;
+                border-left-color: #dba617;
+                color: #614700;
+            }
+            .wcotl-notice-callout.info {
+                background: #f0f7ff;
+                border-left-color: #0073aa;
+                color: #0c4a6e;
+            }
+            .wcotl-footer-actions {
+                margin-top: 24px;
+                padding-top: 16px;
+                border-top: 1px solid #dcdcde;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+        </style>
+
+        <div class="wrap wcotl-admin wcotl-settings-wrap">
             <h1>
-                <span class="dashicons dashicons-admin-settings"></span>
-                Auto-Tracking Settings
+                <span class="dashicons dashicons-admin-settings" style="font-size:28px;width:28px;height:28px;"></span>
+                <?php esc_html_e( 'Tracking Settings', 'wc-order-timeline' ); ?>
             </h1>
 
             <?php if ( $saved ) : ?>
-                <div class="notice notice-success is-dismissible"><p>Settings saved.</p></div>
+                <div class="notice notice-success is-dismissible" style="margin-top:14px;">
+                    <p><strong><?php esc_html_e( 'Settings updated successfully.', 'wc-order-timeline' ); ?></strong></p>
+                </div>
             <?php endif; ?>
 
-            <!-- 17TRACK configuration -->
-            <div class="card" style="max-width:620px;">
-                <h2><span class="dashicons dashicons-share-alt"></span> 17TRACK API</h2>
-                <p style="font-size:13px;color:#646970;margin-bottom:16px;">
-                    Get your API key at <a href="https://api.17track.net" target="_blank">api.17track.net</a>.
-                    Auto-tracking is enabled for all codes that have a real carrier tracking number associated.
-                </p>
+            <!-- Navigation Tabs -->
+            <nav class="nav-tab-wrapper" style="margin-top:18px;">
+                <?php foreach ( $allowed_tabs as $tab_key => $tab_label ) :
+                    $active_class = ( $current_tab === $tab_key ) ? 'nav-tab-active' : '';
+                    $icon = match( $tab_key ) {
+                        'providers' => 'dashicons-location-alt',
+                        'sync'      => 'dashicons-update',
+                        'rates'     => 'dashicons-money-alt',
+                        'security'  => 'dashicons-shield',
+                        'system'    => 'dashicons-admin-tools',
+                        default     => 'dashicons-admin-generic',
+                    };
+                ?>
+                    <a href="<?php echo esc_url( admin_url( 'admin.php?page=wcotl-settings&tab=' . $tab_key ) ); ?>"
+                       class="nav-tab <?php echo esc_attr( $active_class ); ?>">
+                        <span class="dashicons <?php echo esc_attr( $icon ); ?>" style="font-size:16px;width:16px;height:16px;line-height:16px;vertical-align:text-top;margin-right:4px;"></span>
+                        <?php echo esc_html( $tab_label ); ?>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
 
-                <form method="POST" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
-                    <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
-                    <input type="hidden" name="action" value="wcotl_save_settings">
+            <div class="wcotl-tab-content">
 
-                    <div class="wcotl-form-row">
-                        <label>
-                            17TRACK API Key
-                            <?php if ( $api_key ) : ?>
-                                <span style="color:#008a20;font-size:11px;margin-left:6px;">✓ Configured</span>
-                            <?php endif; ?>
-                        </label>
-                        <div style="display:flex;gap:6px;">
-                            <input type="password" id="wcotl_api_key_field" name="wcotl_17track_api_key"
-                                   value="<?php echo esc_attr( $api_key ); ?>"
-                                   placeholder="Paste your API key here"
-                                   style="font-family:monospace;flex:1;">
-                            <button type="button" class="button" onclick="var f = document.getElementById('wcotl_api_key_field'); f.type = f.type === 'password' ? 'text' : 'password'; this.textContent = f.type === 'password' ? 'Show' : 'Hide';">Show</button>
-                        </div>
-                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
-                            Leave empty to disable auto-tracking.
-                        </small>
-                    </div>
+                <!-- ============================================================== -->
+                <!-- TAB 1: TRACKING PROVIDERS                                      -->
+                <!-- ============================================================== -->
+                <?php if ( $current_tab === 'providers' ) : ?>
 
-                    <div style="margin:10px 0 16px;padding:8px 10px;background:#f0f0f1;border-radius:3px;font-size:11px;color:#50575e;line-height:1.4;">
-                        ℹ <strong>Note on 17TRACK Quotas:</strong> 17TRACK does not provide an API endpoint to query remaining quota programmatically. You can view your live account balance and remaining tracking credits on the <a href="https://api.17track.net" target="_blank" style="text-decoration:underline;">17TRACK Management Console ↗</a>.
-                    </div>
-
-                    <div class="wcotl-form-row">
-                        <label>Sync Interval (hours)</label>
-                        <input type="number" name="wcotl_sync_interval"
-                               value="<?php echo esc_attr( $sync_interval ); ?>"
-                               min="1" max="24" step="1" style="width:120px;">
-                        <?php if ( $next_sync ) : ?>
-                            <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
-                                Next sync: <?php echo esc_html( date('d/m/Y H:i', $next_sync) ); ?>
-                            </small>
-                        <?php endif; ?>
-                    </div>
-
-                    <div class="wcotl-form-row">
-                        <label>Inactivity days before stopping tracking</label>
-                        <input type="number" name="wcotl_inactivity_days"
-                               value="<?php echo esc_attr( $inactivity_days ); ?>"
-                               min="1" max="365" step="1" style="width:120px;">
-                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
-                            If no updates are received for this number of days,
-                            auto-tracking is stopped and an email is sent to the admin.
-                        </small>
-                    </div>
-
-                    <div class="wcotl-form-row" style="margin-top:20px;padding-top:16px;border-top:1px solid #e0e0e0;">
-                        <label style="font-weight:600;display:block;margin-bottom:8px;">
-                            Data Retention &amp; Uninstall
-                        </label>
-                        <label style="font-weight:normal;display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
-                            <input type="checkbox" name="wcotl_delete_data_on_uninstall" value="1" <?php checked( $delete_data_on_uninstall, 1 ); ?> style="margin-top:2px;">
-                            <span>
-                                <strong>Erase all data upon uninstall</strong>
-                                <span style="font-size:12px;color:#646970;display:block;margin-top:2px;line-height:1.4;">
-                                     If enabled, all database tables (<code>order_timeline</code>, <code>order_timeline_meta</code>, <code>order_timeline_presets</code>) and settings will be permanently dropped when deleting the plugin. If unchecked (default), all data and configurations are retained.
-                                </span>
-                            </span>
-                        </label>
-                    </div>
-
-                    <button type="submit" name="wcotl_save_general_settings" value="1" class="button button-primary" style="margin-top:16px;">
-                        Save Settings
-                    </button>
-                </form>
-            </div>
-
-            <!-- Track123 API -->
-            <div class="card" style="max-width:620px;margin-top:20px;">
-                <h2><span class="dashicons dashicons-location"></span> Track123 API</h2>
-                <p style="font-size:13px;color:#646970;margin-bottom:16px;">
-                    Enter your Track123 API Secret to enable auto-tracking via Track123.
-                    Get your API key from the <a href="https://member.track123.com/api" target="_blank">Track123 Admin Portal (Developers → API)</a>.
-                    Supports over 1,700 couriers worldwide with automated tracking updates and carrier auto-detection.
-                </p>
-
-                <form method="POST" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
-                    <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
-                    <input type="hidden" name="action" value="wcotl_save_settings">
-
-                    <div class="wcotl-form-row">
-                        <label>
-                            Track123 API Key / Secret
-                            <?php if ( $track123_api_key ) : ?>
-                                <span style="color:#008a20;font-size:11px;margin-left:6px;">✓ Configured</span>
-                            <?php endif; ?>
-                        </label>
-                        <div style="display:flex;gap:6px;">
-                            <input type="password" id="wcotl_track123_key_field" name="wcotl_track123_api_key"
-                                   value="<?php echo esc_attr( $track123_api_key ); ?>"
-                                   placeholder="Paste your Track123 API Secret here"
-                                   style="font-family:monospace;flex:1;">
-                            <button type="button" class="button" onclick="var f = document.getElementById('wcotl_track123_key_field'); f.type = f.type === 'password' ? 'text' : 'password'; this.textContent = f.type === 'password' ? 'Show' : 'Hide';">Show</button>
-                        </div>
-                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
-                            Leave empty to disable Track123 auto-tracking.
-                        </small>
-                    </div>
-
-                    <?php if ( $track123_api_key ) : 
-                        $t123_provider = WCOTL_Auto_Sync::get_track123_provider();
-                        $t123_quota    = $t123_provider ? $t123_provider->get_quota() : null;
-                    ?>
-                        <div id="wcotl-track123-quota-box" style="margin:14px 0;padding:12px 14px;background:#f8f9fa;border:1px solid #dcdcde;border-radius:4px;">
-                            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-                                <div>
-                                    <strong style="font-size:12px;color:#1d2327;">Account Tracking Quota:</strong>
-                                    <span id="wcotl-t123-quota-display" style="margin-left:6px;font-size:13px;">
-                                        <?php if ( ! empty( $t123_quota['error'] ) ) : ?>
-                                            <span style="color:#d63638;"><?php echo esc_html( $t123_quota['error'] ); ?></span>
-                                        <?php elseif ( isset( $t123_quota['remaining'], $t123_quota['total'] ) ) : ?>
-                                            <span style="font-weight:600;color:<?php echo ( $t123_quota['remaining'] <= 0 ) ? '#d63638' : '#008a20'; ?>;">
-                                                <?php echo esc_html( number_format_i18n( $t123_quota['remaining'] ) ); ?> / <?php echo esc_html( number_format_i18n( $t123_quota['total'] ) ); ?>
-                                            </span> shipments remaining
-                                        <?php else : ?>
-                                            <span style="color:#646970;">Unknown</span>
-                                        <?php endif; ?>
-                                    </span>
-                                </div>
-                                <button type="button" class="button button-small" id="wcotl-t123-refresh-btn" onclick="wcotlRefreshTrack123Quota(this)">
-                                    ↻ Refresh Quota
-                                </button>
+                    <!-- Provider Summary Tiles -->
+                    <div class="wcotl-status-grid">
+                        <div class="wcotl-status-tile">
+                            <div>
+                                <div class="tile-title">17TRACK</div>
+                                <div class="tile-sub">Carrier Tracking API</div>
                             </div>
-                            <?php if ( isset( $t123_quota['remaining'], $t123_quota['total'] ) && $t123_quota['total'] > 0 ) : 
-                                $pct = max( 0, min( 100, (int) round( ( $t123_quota['remaining'] / $t123_quota['total'] ) * 100 ) ) );
-                                $bar_color = ( $pct > 20 ) ? '#008a20' : ( ( $pct > 5 ) ? '#dba617' : '#d63638' );
+                            <?php if ( $api_key ) : ?>
+                                <span class="wcotl-badge-pill wcotl-badge-success">✓ Active</span>
+                            <?php else : ?>
+                                <span class="wcotl-badge-pill wcotl-badge-neutral">Inactive</span>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="wcotl-status-tile">
+                            <div>
+                                <div class="tile-title">Track123</div>
+                                <div class="tile-sub">REST API v2.1 (1,700+ couriers)</div>
+                            </div>
+                            <?php if ( $track123_api_key ) : ?>
+                                <span class="wcotl-badge-pill wcotl-badge-success">✓ Active</span>
+                            <?php else : ?>
+                                <span class="wcotl-badge-pill wcotl-badge-neutral">Inactive</span>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="wcotl-status-tile">
+                            <div>
+                                <div class="tile-title">Packlink PRO</div>
+                                <div class="tile-sub">Shipment Reference Sync</div>
+                            </div>
+                            <?php if ( ! $packlink_active ) : ?>
+                                <span class="wcotl-badge-pill wcotl-badge-warning">Plugin Needed</span>
+                            <?php elseif ( $packlink_api_key ) : ?>
+                                <span class="wcotl-badge-pill wcotl-badge-success">✓ Active</span>
+                            <?php else : ?>
+                                <span class="wcotl-badge-pill wcotl-badge-neutral">Inactive</span>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="wcotl-status-tile">
+                            <div>
+                                <div class="tile-title">FedEx</div>
+                                <div class="tile-sub">REST API (<?php echo esc_html( ucfirst( $fedex_environment ) ); ?>)</div>
+                            </div>
+                            <?php if ( $fedex_configured ) : ?>
+                                <span class="wcotl-badge-pill wcotl-badge-success">✓ Active</span>
+                            <?php else : ?>
+                                <span class="wcotl-badge-pill wcotl-badge-neutral">Inactive</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <form method="POST" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                        <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
+                        <input type="hidden" name="action" value="wcotl_save_settings">
+                        <input type="hidden" name="current_tab" value="providers">
+
+                        <!-- 17TRACK -->
+                        <div class="wcotl-settings-card" id="provider-17track">
+                            <h2>
+                                <span class="dashicons dashicons-share-alt" style="color:#2271b1;"></span>
+                                17TRACK API
+                                <?php if ( $api_key ) : ?>
+                                    <span class="wcotl-badge-pill wcotl-badge-success" style="margin-left:auto;">✓ Configured</span>
+                                <?php endif; ?>
+                            </h2>
+                            <p class="card-description">
+                                Connect to 17TRACK for automated tracking updates across global carriers.
+                                Generate an API key in your account at <a href="https://api.17track.net" target="_blank">api.17track.net ↗</a>.
+                            </p>
+
+                            <div class="wcotl-field-group">
+                                <label class="field-label" for="wcotl_17track_api_key">17TRACK API Key</label>
+                                <div class="wcotl-input-with-button">
+                                    <input type="password" id="wcotl_17track_api_key" name="wcotl_17track_api_key"
+                                           value="<?php echo esc_attr( $api_key ); ?>"
+                                           placeholder="Paste your 17TRACK API key">
+                                    <button type="button" class="button" onclick="wcotlToggleField('wcotl_17track_api_key', this)">Show</button>
+                                </div>
+                                <div class="wcotl-field-help">Leave empty to disable 17TRACK automatic tracking.</div>
+                            </div>
+
+                            <div class="wcotl-notice-callout info">
+                                ℹ <strong>17TRACK Quota Note:</strong> 17TRACK does not provide an API endpoint to programmatically query remaining account balance. Track and monitor your remaining quotas directly in the <a href="https://api.17track.net" target="_blank">17TRACK Management Console ↗</a>.
+                            </div>
+                        </div>
+
+                        <!-- Track123 -->
+                        <div class="wcotl-settings-card" id="provider-track123">
+                            <h2>
+                                <span class="dashicons dashicons-location" style="color:#008a20;"></span>
+                                Track123 API
+                                <?php if ( $track123_api_key ) : ?>
+                                    <span class="wcotl-badge-pill wcotl-badge-success" style="margin-left:auto;">✓ Configured</span>
+                                <?php endif; ?>
+                            </h2>
+                            <p class="card-description">
+                                Connects to the Track123 REST API v2.1 to track shipments across 1,700+ couriers worldwide with multi-carrier checkpoint synchronization and auto-detection.
+                                Get your API Secret from the <a href="https://member.track123.com/api" target="_blank">Track123 Admin Portal (Developers → API) ↗</a>.
+                            </p>
+
+                            <div class="wcotl-field-group">
+                                <label class="field-label" for="wcotl_track123_api_key">Track123 API Key / Secret</label>
+                                <div class="wcotl-input-with-button">
+                                    <input type="password" id="wcotl_track123_api_key" name="wcotl_track123_api_key"
+                                           value="<?php echo esc_attr( $track123_api_key ); ?>"
+                                           placeholder="Paste your Track123 API Secret">
+                                    <button type="button" class="button" onclick="wcotlToggleField('wcotl_track123_api_key', this)">Show</button>
+                                </div>
+                                <div class="wcotl-field-help">Leave empty to disable Track123 automatic tracking.</div>
+                            </div>
+
+                            <?php if ( $track123_api_key ) :
+                                $t123_provider = WCOTL_Auto_Sync::get_track123_provider();
+                                $t123_quota    = $t123_provider ? $t123_provider->get_quota() : null;
                             ?>
-                                <div id="wcotl-t123-progress-bar-wrap" style="margin-top:8px;background:#e2e4e7;border-radius:3px;height:6px;overflow:hidden;position:relative;">
-                                    <div id="wcotl-t123-progress-bar" style="width:<?php echo $pct; ?>%;background:<?php echo $bar_color; ?>;height:100%;"></div>
+                                <div id="wcotl-track123-quota-box" style="margin:14px 0;padding:12px 14px;background:#f8f9fa;border:1px solid #dcdcde;border-radius:4px;max-width:580px;">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                                        <div>
+                                            <strong style="font-size:12px;color:#1d2327;">Live Account Quota:</strong>
+                                            <span id="wcotl-t123-quota-display" style="margin-left:6px;font-size:13px;">
+                                                <?php if ( ! empty( $t123_quota['error'] ) ) : ?>
+                                                    <span style="color:#d63638;"><?php echo esc_html( $t123_quota['error'] ); ?></span>
+                                                <?php elseif ( isset( $t123_quota['remaining'], $t123_quota['total'] ) ) : ?>
+                                                    <span style="font-weight:600;color:<?php echo ( $t123_quota['remaining'] <= 0 ) ? '#d63638' : '#008a20'; ?>;">
+                                                        <?php echo esc_html( number_format_i18n( $t123_quota['remaining'] ) ); ?> / <?php echo esc_html( number_format_i18n( $t123_quota['total'] ) ); ?>
+                                                    </span> shipments remaining
+                                                <?php else : ?>
+                                                    <span style="color:#646970;">Unknown</span>
+                                                <?php endif; ?>
+                                            </span>
+                                        </div>
+                                        <button type="button" class="button button-small" id="wcotl-t123-refresh-btn" onclick="wcotlRefreshTrack123Quota(this)">
+                                            ↻ Refresh Quota
+                                        </button>
+                                    </div>
+                                    <?php if ( isset( $t123_quota['remaining'], $t123_quota['total'] ) && $t123_quota['total'] > 0 ) :
+                                        $pct = max( 0, min( 100, (int) round( ( $t123_quota['remaining'] / $t123_quota['total'] ) * 100 ) ) );
+                                        $bar_color = ( $pct > 20 ) ? '#008a20' : ( ( $pct > 5 ) ? '#dba617' : '#d63638' );
+                                    ?>
+                                        <div id="wcotl-t123-progress-bar-wrap" style="margin-top:8px;background:#e2e4e7;border-radius:3px;height:6px;overflow:hidden;position:relative;">
+                                            <div id="wcotl-t123-progress-bar" style="width:<?php echo $pct; ?>%;background:<?php echo $bar_color; ?>;height:100%;"></div>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                             <?php endif; ?>
                         </div>
-                    <?php endif; ?>
 
-                    <button type="submit" class="button button-primary" style="margin-top:8px;">
-                        Save Track123 Settings
-                    </button>
-                </form>
-            </div>
+                        <!-- Packlink PRO -->
+                        <div class="wcotl-settings-card" id="provider-packlink">
+                            <h2>
+                                <span class="dashicons dashicons-cart" style="color:#d63638;"></span>
+                                Packlink PRO API
+                                <?php if ( ! $packlink_active ) : ?>
+                                    <span class="wcotl-badge-pill wcotl-badge-warning" style="margin-left:auto;">Plugin Inactive</span>
+                                <?php elseif ( $packlink_api_key ) : ?>
+                                    <span class="wcotl-badge-pill wcotl-badge-success" style="margin-left:auto;">✓ Configured</span>
+                                <?php endif; ?>
+                            </h2>
 
-            <!-- Packlink PRO API -->
-            <div class="card" style="max-width:620px;margin-top:20px;">
-                <h2><span class="dashicons dashicons-cart"></span> Packlink PRO API</h2>
-                <?php if ( ! $packlink_plugin_active ) : ?>
-                    <p style="font-size:13px;color:#646970;">
-                        <span style="color:#d63638;font-weight:600;">⚠ Packlink PRO Shipping plugin not detected.</span><br>
-                        The Packlink PRO tracking provider is only available when the
-                        <a href="https://wordpress.org/plugins/packlink-pro-shipping/" target="_blank">Packlink PRO Shipping for WooCommerce</a>
-                        plugin is installed and active.
-                    </p>
-                <?php else : ?>
-                <p style="font-size:13px;color:#646970;margin-bottom:16px;">
-                    Enter your Packlink PRO API key to enable auto-tracking for shipments created via Packlink.
-                    Get your key from your <a href="https://pro.packlink.com" target="_blank">Packlink PRO dashboard</a>
-                    under <strong>Settings → Packlink PRO API</strong>.
-                    Unlike 17TRACK, Packlink tracks by its own <strong>Shipment Reference</strong> — no carrier code needed.
-                </p>
-
-                <form method="POST" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
-                    <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
-                    <input type="hidden" name="action" value="wcotl_save_settings">
-
-                    <div class="wcotl-form-row">
-                        <label>
-                            Packlink PRO API Key
-                            <?php if ( $packlink_api_key ) : ?>
-                                <span style="color:#008a20;font-size:11px;margin-left:6px;">✓ Configured</span>
-                            <?php endif; ?>
-                        </label>
-                        <div style="display:flex;gap:6px;">
-                            <input type="password" id="wcotl_packlink_key_field" name="wcotl_packlink_api_key"
-                                   value="<?php echo esc_attr( $packlink_api_key ); ?>"
-                                   placeholder="Paste your Packlink PRO API key here"
-                                   style="font-family:monospace;flex:1;">
-                            <button type="button" class="button" onclick="var f = document.getElementById('wcotl_packlink_key_field'); f.type = f.type === 'password' ? 'text' : 'password'; this.textContent = f.type === 'password' ? 'Show' : 'Hide';">Show</button>
-                        </div>
-                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
-                            Leave empty to disable Packlink auto-tracking.
-                        </small>
-                    </div>
-
-                    <button type="submit" class="button button-primary" style="margin-top:8px;">
-                        Save Packlink Settings
-                    </button>
-                </form>
-                <?php endif; ?>
-            </div>
-
-            <!-- FedEx REST API -->
-            <div class="card" style="max-width:620px;margin-top:20px;">
-                <h2><span class="dashicons dashicons-airplane"></span> FedEx API</h2>
-                <p style="font-size:13px;color:#646970;margin-bottom:16px;">
-                    Enter your FedEx REST API credentials to enable auto-tracking for FedEx shipments.
-                    Create an organization project and obtain your API Key (Client ID) and Secret Key (Client Secret) at the
-                    <a href="https://developer.fedex.com" target="_blank">FedEx Developer Portal</a>.
-                </p>
-
-                <form method="POST" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
-                    <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
-                    <input type="hidden" name="action" value="wcotl_save_settings">
-
-                    <div class="wcotl-form-row">
-                        <label>
-                            FedEx API Key / Client ID
-                            <?php if ( $fedex_configured ) : ?>
-                                <span style="color:#008a20;font-size:11px;margin-left:6px;">✓ Configured</span>
-                            <?php endif; ?>
-                        </label>
-                        <input type="text" name="wcotl_fedex_client_id"
-                               value="<?php echo esc_attr( $fedex_client_id ); ?>"
-                               placeholder="e.g. l7xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                               style="font-family:monospace;width:100%;">
-                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
-                            Leave empty to disable FedEx auto-tracking.
-                        </small>
-                    </div>
-
-                    <div class="wcotl-form-row">
-                        <label>FedEx Secret Key / Client Secret</label>
-                        <div style="display:flex;gap:6px;">
-                            <input type="password" id="wcotl_fedex_secret_field" name="wcotl_fedex_client_secret"
-                                   value="<?php echo esc_attr( $fedex_client_secret ); ?>"
-                                   placeholder="Paste your FedEx Secret Key here"
-                                   style="font-family:monospace;flex:1;">
-                            <button type="button" class="button" onclick="var f = document.getElementById('wcotl_fedex_secret_field'); f.type = f.type === 'password' ? 'text' : 'password'; this.textContent = f.type === 'password' ? 'Show' : 'Hide';">Show</button>
-                        </div>
-                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
-                            Used to obtain OAuth 2.0 Bearer tokens for the FedEx Track API.
-                        </small>
-                    </div>
-
-                    <div class="wcotl-form-row">
-                        <label>Environment</label>
-                        <select name="wcotl_fedex_environment" style="width:240px;">
-                            <option value="production" <?php selected( $fedex_environment, 'production' ); ?>>Production (apis.fedex.com)</option>
-                            <option value="sandbox" <?php selected( $fedex_environment, 'sandbox' ); ?>>Sandbox (apis-sandbox.fedex.com)</option>
-                        </select>
-                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
-                            Select Sandbox for testing credentials, Production for live tracking.
-                        </small>
-                    </div>
-
-                    <button type="submit" class="button button-primary" style="margin-top:8px;">
-                        Save FedEx Settings
-                    </button>
-                </form>
-            </div>
-
-            <!-- Paccofacile.it API (Rate Quoting & Comparison) -->
-            <div class="card" style="max-width:620px;margin-top:20px;">
-                <h2><span class="dashicons dashicons-money-alt"></span> Paccofacile.it API (Rate Comparison)</h2>
-                <p style="font-size:13px;color:#646970;margin-bottom:16px;">
-                    Connect your <a href="https://www.paccofacile.it" target="_blank">Paccofacile.it</a> PRO account to compare live courier shipping rates against Packlink PRO directly on the order screen.
-                    Find your API credentials under <strong>Paccofacile PRO &rarr; Integrazioni / API</strong>.
-                </p>
-
-                <?php if ( $paccofacile_plugin && empty( $paccofacile_acc ) && empty( $paccofacile_key ) && empty( $paccofacile_token ) ) : ?>
-                    <div style="background:#f0f6fc;border-left:4px solid #2271b1;padding:8px 12px;margin-bottom:12px;font-size:12px;color:#1d2327;">
-                        ℹ <strong>Paccofacile plugin detected:</strong> Credentials are automatically imported from your existing Paccofacile for WooCommerce settings when left blank below.
-                    </div>
-                <?php endif; ?>
-
-                <form method="POST" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
-                    <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
-                    <input type="hidden" name="action" value="wcotl_save_settings">
-
-                    <div class="wcotl-form-row">
-                        <label>
-                            Account Number
-                            <?php if ( $paccofacile_configured ) : ?>
-                                <span style="color:#008a20;font-size:11px;margin-left:6px;">✓ Configured</span>
-                            <?php endif; ?>
-                        </label>
-                        <input type="text" name="wcotl_paccofacile_account_number"
-                               value="<?php echo esc_attr( $paccofacile_acc ); ?>"
-                               placeholder="e.g. 12345"
-                               style="font-family:monospace;width:100%;">
-                    </div>
-
-                    <div class="wcotl-form-row">
-                        <label>API Key</label>
-                        <input type="text" name="wcotl_paccofacile_api_key"
-                               value="<?php echo esc_attr( $paccofacile_key ); ?>"
-                               placeholder="e.g. pf_live_xxxxxxxxxxxxxxxxxxxxxxxx"
-                               style="font-family:monospace;width:100%;">
-                    </div>
-
-                    <div class="wcotl-form-row">
-                        <label>Bearer Token</label>
-                        <div style="display:flex;gap:6px;">
-                            <input type="password" id="wcotl_paccofacile_token_field" name="wcotl_paccofacile_token"
-                                   value="<?php echo esc_attr( $paccofacile_token ); ?>"
-                                   placeholder="Paste your Paccofacile Bearer Token here"
-                                   style="font-family:monospace;flex:1;">
-                            <button type="button" class="button" onclick="var f = document.getElementById('wcotl_paccofacile_token_field'); f.type = f.type === 'password' ? 'text' : 'password'; this.textContent = f.type === 'password' ? 'Show' : 'Hide';">Show</button>
-                        </div>
-                    </div>
-
-                    <div class="wcotl-form-row">
-                        <label>Environment</label>
-                        <select name="wcotl_paccofacile_environment" style="width:240px;">
-                            <option value="live" <?php selected( $paccofacile_env, 'live' ); ?>>Production (Live)</option>
-                            <option value="sandbox" <?php selected( $paccofacile_env, 'sandbox' ); ?>>Sandbox (Testing)</option>
-                        </select>
-                    </div>
-
-                    <hr style="margin:16px 0;border:0;border-top:1px solid #dcdcde;">
-
-                    <h3 style="font-size:13px;margin:0 0 8px 0;"><?php esc_html_e( 'Default Package Fallback Dimensions', 'wc-order-timeline' ); ?></h3>
-                    <p style="font-size:12px;color:#646970;margin-bottom:12px;">
-                        Used to pre-fill the rate comparator when order items do not have custom weight or parcel dimensions configured.
-                    </p>
-
-                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;">
-                        <div>
-                            <label style="font-size:11px;color:#50575e;display:block;margin-bottom:2px;">Weight (kg)</label>
-                            <input type="number" step="0.01" min="0.01" name="wcotl_default_package_weight" value="<?php echo esc_attr( $default_package_weight ); ?>" style="width:100%;">
-                        </div>
-                        <div>
-                            <label style="font-size:11px;color:#50575e;display:block;margin-bottom:2px;">Length (cm)</label>
-                            <input type="number" step="1" min="1" name="wcotl_default_package_length" value="<?php echo esc_attr( $default_package_length ); ?>" style="width:100%;">
-                        </div>
-                        <div>
-                            <label style="font-size:11px;color:#50575e;display:block;margin-bottom:2px;">Width (cm)</label>
-                            <input type="number" step="1" min="1" name="wcotl_default_package_width" value="<?php echo esc_attr( $default_package_width ); ?>" style="width:100%;">
-                        </div>
-                        <div>
-                            <label style="font-size:11px;color:#50575e;display:block;margin-bottom:2px;">Height (cm)</label>
-                            <input type="number" step="1" min="1" name="wcotl_default_package_height" value="<?php echo esc_attr( $default_package_height ); ?>" style="width:100%;">
-                        </div>
-                    </div>
-
-                    <button type="submit" class="button button-primary" style="margin-top:14px;">
-                        Save Paccofacile &amp; Package Settings
-                    </button>
-                </form>
-            </div>
-
-            <!-- Cloudflare Turnstile & Anti-Scraping Protection -->
-            <?php
-            $turnstile_site_key   = get_option( 'wcotl_turnstile_site_key', '' );
-            $turnstile_secret_key = get_option( 'wcotl_turnstile_secret_key', '' );
-            $rate_limit_max       = max( 1, (int) get_option( 'wcotl_rate_limit_max_requests', 15 ) );
-            $turnstile_configured = ( ! empty( $turnstile_site_key ) && ! empty( $turnstile_secret_key ) );
-            ?>
-            <div class="card" style="max-width:620px;margin-top:20px;">
-                <h2>
-                    <span class="dashicons dashicons-shield"></span>
-                    Frontend Security &amp; Cloudflare Turnstile
-                </h2>
-                <p style="font-size:13px;color:#646970;margin-bottom:16px;">
-                    Protect the frontend order tracking lookup shortcode (<code>[wc_order_timeline_tracking]</code>) from automated bot enumeration, scraping, and brute-force queries.
-                </p>
-
-                <form method="POST" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
-                    <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
-                    <input type="hidden" name="action" value="wcotl_save_settings">
-
-                    <div class="wcotl-form-row">
-                        <label>
-                            Cloudflare Turnstile Site Key
-                            <?php if ( $turnstile_configured ) : ?>
-                                <span style="color:#008a20;font-size:11px;margin-left:6px;">✓ Active</span>
+                            <?php if ( ! $packlink_active ) : ?>
+                                <div class="wcotl-notice-callout warning">
+                                    <strong>⚠ Packlink PRO Shipping plugin not detected:</strong>
+                                    The Packlink PRO tracking provider requires the official
+                                    <a href="https://wordpress.org/plugins/packlink-pro-shipping/" target="_blank">Packlink PRO Shipping for WooCommerce ↗</a>
+                                    plugin to be installed and active.
+                                </div>
                             <?php else : ?>
-                                <span style="color:#8c8f94;font-size:11px;margin-left:6px;">(Optional)</span>
+                                <p class="card-description">
+                                    Enables auto-tracking using Packlink <strong>Shipment References</strong> (e.g. <code>ES2023...</code>) directly from your Packlink PRO account.
+                                    Obtain your API key from the <a href="https://pro.packlink.com" target="_blank">Packlink PRO Dashboard (Settings → Packlink PRO API) ↗</a>.
+                                </p>
+
+                                <div class="wcotl-field-group">
+                                    <label class="field-label" for="wcotl_packlink_api_key">Packlink PRO API Key</label>
+                                    <div class="wcotl-input-with-button">
+                                        <input type="password" id="wcotl_packlink_api_key" name="wcotl_packlink_api_key"
+                                               value="<?php echo esc_attr( $packlink_api_key ); ?>"
+                                               placeholder="Paste your Packlink PRO API key">
+                                        <button type="button" class="button" onclick="wcotlToggleField('wcotl_packlink_api_key', this)">Show</button>
+                                    </div>
+                                    <div class="wcotl-field-help">Leave empty to disable Packlink auto-tracking.</div>
+                                </div>
                             <?php endif; ?>
-                        </label>
-                        <input type="text" name="wcotl_turnstile_site_key"
-                               value="<?php echo esc_attr( $turnstile_site_key ); ?>"
-                               placeholder="e.g. 0x4AAAAAA..."
-                               style="font-family:monospace;width:100%;">
-                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
-                            Obtain your Turnstile Site Key and Secret Key from the <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank">Cloudflare Dashboard</a>.
-                        </small>
-                    </div>
-
-                    <div class="wcotl-form-row">
-                        <label>Cloudflare Turnstile Secret Key</label>
-                        <div style="display:flex;gap:6px;">
-                            <input type="password" id="wcotl_turnstile_secret_field" name="wcotl_turnstile_secret_key"
-                                   value="<?php echo esc_attr( $turnstile_secret_key ); ?>"
-                                   placeholder="e.g. 0x4AAAAAA..."
-                                   style="font-family:monospace;flex:1;">
-                            <button type="button" class="button" onclick="var f = document.getElementById('wcotl_turnstile_secret_field'); f.type = f.type === 'password' ? 'text' : 'password'; this.textContent = f.type === 'password' ? 'Show' : 'Hide';">Show</button>
                         </div>
-                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
-                            Used to securely verify Turnstile challenge tokens server-side.
-                        </small>
-                    </div>
 
-                    <div class="wcotl-form-row">
-                        <label>Rate Limit Threshold (max requests per minute per IP)</label>
-                        <input type="number" name="wcotl_rate_limit_max_requests"
-                               value="<?php echo esc_attr( $rate_limit_max ); ?>"
-                               min="1" max="120" step="1" style="width:120px;">
-                        <small style="font-size:11px;color:#646970;display:block;margin-top:4px;">
-                            Default: 15 requests/minute. Limits rapid unauthenticated tracking searches per IP.
-                        </small>
-                    </div>
+                        <!-- FedEx REST API -->
+                        <div class="wcotl-settings-card" id="provider-fedex">
+                            <h2>
+                                <span class="dashicons dashicons-airplane" style="color:#7832ba;"></span>
+                                FedEx REST API
+                                <?php if ( $fedex_configured ) : ?>
+                                    <span class="wcotl-badge-pill wcotl-badge-success" style="margin-left:auto;">✓ Configured (<?php echo esc_html( ucfirst( $fedex_environment ) ); ?>)</span>
+                                <?php endif; ?>
+                            </h2>
+                            <p class="card-description">
+                                Direct integration with the FedEx Track API via OAuth 2.0 client credentials.
+                                Create an organization project and obtain your credentials in the <a href="https://developer.fedex.com" target="_blank">FedEx Developer Portal ↗</a>.
+                            </p>
 
-                    <button type="submit" class="button button-primary" style="margin-top:16px;">
-                        Save Security Settings
-                    </button>
-                </form>
-            </div>
+                            <div class="wcotl-field-group">
+                                <label class="field-label" for="wcotl_fedex_client_id">FedEx API Key / Client ID</label>
+                                <input type="text" id="wcotl_fedex_client_id" name="wcotl_fedex_client_id"
+                                       value="<?php echo esc_attr( $fedex_client_id ); ?>"
+                                       placeholder="e.g. l7xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                                       style="max-width:580px;font-family:monospace;width:100%;">
+                            </div>
 
-            <!-- Info box -->
-            <div class="card" style="max-width:620px;background:#f0f7ff;border-color:#b8d4f8;">
-                <h2 style="color:#1a5fa8;">ℹ How auto-tracking works</h2>
-                <ul style="font-size:13px;line-height:1.9;color:#2d4a6e;padding-left:18px;">
-                    <li>For each plugin tracking code, you can attach a shipment reference from <strong>17TRACK</strong>, <strong>Track123</strong>, <strong>Packlink PRO</strong>, or <strong>FedEx</strong>.</li>
-                    <li>The plugin polls active tracking providers every <strong><?php echo $sync_interval; ?> hour(s)</strong> and automatically imports new updates as timeline steps.</li>
-                    <li>Existing manual steps <strong>are never modified or deleted</strong>: they coexist alongside automatic ones.</li>
-                    <li>When the carrier reports the <strong>Delivered</strong> status, the actual delivery date is set automatically.</li>
-                    <li>Polling automatically stops for shipments: Delivered, Expired, or <strong>inactive for <?php echo $inactivity_days; ?> days</strong>.</li>
-                    <li>In case of prolonged inactivity, an email notification is sent to the site admin.</li>
-                </ul>
+                            <div class="wcotl-field-group">
+                                <label class="field-label" for="wcotl_fedex_client_secret">FedEx Secret Key / Client Secret</label>
+                                <div class="wcotl-input-with-button">
+                                    <input type="password" id="wcotl_fedex_client_secret" name="wcotl_fedex_client_secret"
+                                           value="<?php echo esc_attr( $fedex_client_secret ); ?>"
+                                           placeholder="Paste your FedEx Secret Key">
+                                    <button type="button" class="button" onclick="wcotlToggleField('wcotl_fedex_client_secret', this)">Show</button>
+                                </div>
+                                <div class="wcotl-field-help">Used to obtain OAuth 2.0 Bearer tokens for FedEx REST tracking.</div>
+                            </div>
+
+                            <div class="wcotl-field-group">
+                                <label class="field-label" for="wcotl_fedex_environment">Environment</label>
+                                <select id="wcotl_fedex_environment" name="wcotl_fedex_environment" style="width:260px;">
+                                    <option value="production" <?php selected( $fedex_environment, 'production' ); ?>>Production (apis.fedex.com)</option>
+                                    <option value="sandbox" <?php selected( $fedex_environment, 'sandbox' ); ?>>Sandbox (apis-sandbox.fedex.com)</option>
+                                </select>
+                                <div class="wcotl-field-help">Use Sandbox for development and test tracking numbers; select Production for live customer parcels.</div>
+                            </div>
+                        </div>
+
+                        <div class="wcotl-footer-actions">
+                            <button type="submit" class="button button-primary button-hero">
+                                <?php esc_html_e( 'Save Tracking Providers', 'wc-order-timeline' ); ?>
+                            </button>
+                        </div>
+                    </form>
+
+                <!-- ============================================================== -->
+                <!-- TAB 2: AUTO-SYNC ENGINE                                        -->
+                <!-- ============================================================== -->
+                <?php elseif ( $current_tab === 'sync' ) : ?>
+
+                    <form method="POST" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                        <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
+                        <input type="hidden" name="action" value="wcotl_save_settings">
+                        <input type="hidden" name="current_tab" value="sync">
+
+                        <div class="wcotl-settings-card">
+                            <h2>
+                                <span class="dashicons dashicons-update" style="color:#2271b1;"></span>
+                                <?php esc_html_e( 'Background Synchronization Engine', 'wc-order-timeline' ); ?>
+                            </h2>
+                            <p class="card-description">
+                                Configure the background WP-Cron engine (<code>wcotl_auto_sync</code>) that polls active tracking providers (17TRACK, Track123, Packlink, FedEx) to ingest new status updates.
+                            </p>
+
+                            <div class="wcotl-field-group">
+                                <label class="field-label" for="wcotl_sync_interval">
+                                    <?php esc_html_e( 'Sync Polling Interval (hours)', 'wc-order-timeline' ); ?>
+                                </label>
+                                <input type="number" id="wcotl_sync_interval" name="wcotl_sync_interval"
+                                       value="<?php echo esc_attr( $sync_interval ); ?>"
+                                       min="1" max="24" step="1" style="width:120px;">
+                                <div class="wcotl-field-help">
+                                    Frequency in hours between background checks. Default is <code>1</code> hour.
+                                    <?php if ( $next_sync ) :
+                                        $time_diff = human_time_diff( time(), $next_sync );
+                                    ?>
+                                        <br><strong>Next Scheduled Run:</strong> <?php echo esc_html( date_i18n( get_option('date_format') . ' ' . get_option('time_format'), $next_sync ) ); ?>
+                                        <span class="wcotl-badge-pill wcotl-badge-neutral" style="margin-left:4px;">in <?php echo esc_html( $time_diff ); ?></span>
+                                    <?php else : ?>
+                                        <br><span style="color:#d63638;">⚠ No background cron schedule currently active. Saving settings will reschedule it automatically.</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+
+                            <div class="wcotl-field-group" style="margin-top:20px;">
+                                <label class="field-label" for="wcotl_inactivity_days">
+                                    <?php esc_html_e( 'Inactivity Threshold Before Stopping (days)', 'wc-order-timeline' ); ?>
+                                </label>
+                                <input type="number" id="wcotl_inactivity_days" name="wcotl_inactivity_days"
+                                       value="<?php echo esc_attr( $inactivity_days ); ?>"
+                                       min="1" max="365" step="1" style="width:120px;">
+                                <div class="wcotl-field-help">
+                                    If a carrier returns no status changes for this number of consecutive days, automated polling ceases to conserve API quota.
+                                    An email notification is automatically dispatched to the site administrator (<code><?php echo esc_html( $admin_email ); ?></code>).
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- How Auto-Sync Operates -->
+                        <div class="wcotl-settings-card" style="background:#f9fbfd;border-color:#d0e2f5;">
+                            <h2 style="color:#1d2327;">
+                                <span class="dashicons dashicons-info" style="color:#2271b1;"></span>
+                                <?php esc_html_e( 'Automation Rules & Milestone Handling', 'wc-order-timeline' ); ?>
+                            </h2>
+                            <ul style="font-size:13px;line-height:1.8;color:#2c3338;margin:12px 0 0 18px;list-style:disc;">
+                                <li><strong>Preserved Manual History:</strong> Existing manual steps and preset milestones are <em>never</em> overwritten, modified, or deleted. Automatic provider scans are appended seamlessly.</li>
+                                <li><strong>Automated Delivery Finalization:</strong> When the carrier flags the parcel as <code>Delivered</code>, the actual delivery timestamp is recorded automatically in the order meta.</li>
+                                <li><strong>Smart Quota Cease:</strong> Background queries automatically cease for shipments that are marked <code>Delivered</code>, <code>Expired</code>, or have exceeded the inactivity threshold.</li>
+                                <li><strong>Instant Sync &amp; Resume:</strong> On any tracking code detail screen, administrators can click <em>Sync Now</em> for immediate live queries or resume stopped tracking with one click.</li>
+                            </ul>
+                        </div>
+
+                        <div class="wcotl-footer-actions">
+                            <button type="submit" class="button button-primary button-hero">
+                                <?php esc_html_e( 'Save Sync Settings', 'wc-order-timeline' ); ?>
+                            </button>
+                        </div>
+                    </form>
+
+                <!-- ============================================================== -->
+                <!-- TAB 3: RATE COMPARATOR                                         -->
+                <!-- ============================================================== -->
+                <?php elseif ( $current_tab === 'rates' ) : ?>
+
+                    <form method="POST" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                        <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
+                        <input type="hidden" name="action" value="wcotl_save_settings">
+                        <input type="hidden" name="current_tab" value="rates">
+
+                        <!-- Paccofacile.it API -->
+                        <div class="wcotl-settings-card">
+                            <h2>
+                                <span class="dashicons dashicons-money-alt" style="color:#008a20;"></span>
+                                Paccofacile.it API
+                                <?php if ( $paccofacile_configured ) : ?>
+                                    <span class="wcotl-badge-pill wcotl-badge-success" style="margin-left:auto;">✓ Configured</span>
+                                <?php endif; ?>
+                            </h2>
+                            <p class="card-description">
+                                Connect your <a href="https://www.paccofacile.it" target="_blank">Paccofacile.it ↗</a> PRO account to quote and compare live shipping rates alongside Packlink PRO directly on the order details screen.
+                                Obtain your credentials under <strong>Paccofacile PRO &rarr; Integrazioni / API</strong>.
+                            </p>
+
+                            <?php if ( $paccofacile_plugin && empty( $paccofacile_acc ) && empty( $paccofacile_key ) && empty( $paccofacile_token ) ) : ?>
+                                <div class="wcotl-notice-callout info">
+                                    ℹ <strong>Paccofacile for WooCommerce detected:</strong> Credentials are automatically imported from your existing Paccofacile plugin settings when left blank below.
+                                </div>
+                            <?php endif; ?>
+
+                            <div class="wcotl-field-group">
+                                <label class="field-label" for="wcotl_paccofacile_account_number">Paccofacile Account Number</label>
+                                <input type="text" id="wcotl_paccofacile_account_number" name="wcotl_paccofacile_account_number"
+                                       value="<?php echo esc_attr( $paccofacile_acc ); ?>"
+                                       placeholder="e.g. 12345"
+                                       style="max-width:580px;font-family:monospace;width:100%;">
+                            </div>
+
+                            <div class="wcotl-field-group">
+                                <label class="field-label" for="wcotl_paccofacile_api_key">Paccofacile API Key</label>
+                                <input type="text" id="wcotl_paccofacile_api_key" name="wcotl_paccofacile_api_key"
+                                       value="<?php echo esc_attr( $paccofacile_key ); ?>"
+                                       placeholder="e.g. pf_live_xxxxxxxxxxxxxxxxxxxxxxxx"
+                                       style="max-width:580px;font-family:monospace;width:100%;">
+                            </div>
+
+                            <div class="wcotl-field-group">
+                                <label class="field-label" for="wcotl_paccofacile_token">Paccofacile Bearer Token</label>
+                                <div class="wcotl-input-with-button">
+                                    <input type="password" id="wcotl_paccofacile_token" name="wcotl_paccofacile_token"
+                                           value="<?php echo esc_attr( $paccofacile_token ); ?>"
+                                           placeholder="Paste your Paccofacile Bearer Token">
+                                    <button type="button" class="button" onclick="wcotlToggleField('wcotl_paccofacile_token', this)">Show</button>
+                                </div>
+                            </div>
+
+                            <div class="wcotl-field-group">
+                                <label class="field-label" for="wcotl_paccofacile_environment">Environment</label>
+                                <select id="wcotl_paccofacile_environment" name="wcotl_paccofacile_environment" style="width:260px;">
+                                    <option value="live" <?php selected( $paccofacile_env, 'live' ); ?>>Production (Live)</option>
+                                    <option value="sandbox" <?php selected( $paccofacile_env, 'sandbox' ); ?>>Sandbox (Testing)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Packlink PRO Quoting Status Card -->
+                        <div class="wcotl-settings-card">
+                            <h2>
+                                <span class="dashicons dashicons-cart" style="color:#2271b1;"></span>
+                                Packlink PRO Quoting Status
+                            </h2>
+                            <p class="card-description">
+                                Live quote comparisons require an active Packlink PRO account key.
+                            </p>
+                            <?php if ( ! empty( $packlink_api_key ) && $packlink_active ) : ?>
+                                <div class="wcotl-notice-callout info" style="margin:0;">
+                                    ✓ <strong>Packlink PRO Quoting Active:</strong> Using API credentials configured in the <a href="<?php echo esc_url( admin_url('admin.php?page=wcotl-settings&tab=providers#provider-packlink') ); ?>">Tracking Providers</a> tab.
+                                </div>
+                            <?php else : ?>
+                                <div class="wcotl-notice-callout warning" style="margin:0;">
+                                    ⚠ <strong>Packlink PRO API is not ready:</strong>
+                                    <?php if ( ! $packlink_active ) : ?>
+                                        Packlink PRO Shipping plugin is not active.
+                                    <?php else : ?>
+                                        Packlink API key is missing.
+                                    <?php endif; ?>
+                                    <a href="<?php echo esc_url( admin_url('admin.php?page=wcotl-settings&tab=providers#provider-packlink') ); ?>" class="button button-small" style="margin-left:8px;">
+                                        Configure Packlink &rarr;
+                                    </a>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Fallback Package Dimensions -->
+                        <div class="wcotl-settings-card">
+                            <h2>
+                                <span class="dashicons dashicons-archive" style="color:#d63638;"></span>
+                                <?php esc_html_e( 'Default Package Fallback Dimensions', 'wc-order-timeline' ); ?>
+                            </h2>
+                            <p class="card-description">
+                                Used to pre-populate shipment parameters when order products lack specific dimensions or weight in their WooCommerce product settings.
+                            </p>
+
+                            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:14px;max-width:680px;">
+                                <div>
+                                    <label class="field-label" for="wcotl_default_package_weight">Weight (kg)</label>
+                                    <input type="number" step="0.01" min="0.01" id="wcotl_default_package_weight" name="wcotl_default_package_weight"
+                                           value="<?php echo esc_attr( $default_package_weight ); ?>" style="width:100%;">
+                                </div>
+                                <div>
+                                    <label class="field-label" for="wcotl_default_package_length">Length (cm)</label>
+                                    <input type="number" step="1" min="1" id="wcotl_default_package_length" name="wcotl_default_package_length"
+                                           value="<?php echo esc_attr( $default_package_length ); ?>" style="width:100%;">
+                                </div>
+                                <div>
+                                    <label class="field-label" for="wcotl_default_package_width">Width (cm)</label>
+                                    <input type="number" step="1" min="1" id="wcotl_default_package_width" name="wcotl_default_package_width"
+                                           value="<?php echo esc_attr( $default_package_width ); ?>" style="width:100%;">
+                                </div>
+                                <div>
+                                    <label class="field-label" for="wcotl_default_package_height">Height (cm)</label>
+                                    <input type="number" step="1" min="1" id="wcotl_default_package_height" name="wcotl_default_package_height"
+                                           value="<?php echo esc_attr( $default_package_height ); ?>" style="width:100%;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="wcotl-footer-actions">
+                            <button type="submit" class="button button-primary button-hero">
+                                <?php esc_html_e( 'Save Rate Comparator Settings', 'wc-order-timeline' ); ?>
+                            </button>
+                        </div>
+                    </form>
+
+                <!-- ============================================================== -->
+                <!-- TAB 4: SECURITY & ANTI-SCRAPING                                -->
+                <!-- ============================================================== -->
+                <?php elseif ( $current_tab === 'security' ) : ?>
+
+                    <form method="POST" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                        <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
+                        <input type="hidden" name="action" value="wcotl_save_settings">
+                        <input type="hidden" name="current_tab" value="security">
+
+                        <!-- Cloudflare Turnstile -->
+                        <div class="wcotl-settings-card">
+                            <h2>
+                                <span class="dashicons dashicons-shield" style="color:#f48120;"></span>
+                                Cloudflare Turnstile CAPTCHA Protection
+                                <?php if ( $turnstile_configured ) : ?>
+                                    <span class="wcotl-badge-pill wcotl-badge-success" style="margin-left:auto;">✓ Active &amp; Enforcing</span>
+                                <?php else : ?>
+                                    <span class="wcotl-badge-pill wcotl-badge-neutral" style="margin-left:auto;">Optional (Inactive)</span>
+                                <?php endif; ?>
+                            </h2>
+                            <p class="card-description">
+                                Safeguard public tracking search lookups (<code>[wc_order_timeline_tracking]</code>) from automated bots, scraping, and enumeration attacks without friction for real customers.
+                                Generate keys in the <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank">Cloudflare Dashboard ↗</a>.
+                            </p>
+
+                            <div class="wcotl-field-group">
+                                <label class="field-label" for="wcotl_turnstile_site_key">Cloudflare Turnstile Site Key</label>
+                                <input type="text" id="wcotl_turnstile_site_key" name="wcotl_turnstile_site_key"
+                                       value="<?php echo esc_attr( $turnstile_site_key ); ?>"
+                                       placeholder="e.g. 0x4AAAAAA..."
+                                       style="max-width:580px;font-family:monospace;width:100%;">
+                            </div>
+
+                            <div class="wcotl-field-group">
+                                <label class="field-label" for="wcotl_turnstile_secret_key">Cloudflare Turnstile Secret Key</label>
+                                <div class="wcotl-input-with-button">
+                                    <input type="password" id="wcotl_turnstile_secret_key" name="wcotl_turnstile_secret_key"
+                                           value="<?php echo esc_attr( $turnstile_secret_key ); ?>"
+                                           placeholder="e.g. 0x4AAAAAA...">
+                                    <button type="button" class="button" onclick="wcotlToggleField('wcotl_turnstile_secret_key', this)">Show</button>
+                                </div>
+                                <div class="wcotl-field-help">Used to securely verify Turnstile challenge tokens server-side upon customer lookup.</div>
+                            </div>
+
+                            <div class="wcotl-notice-callout info">
+                                💡 <strong>Tip:</strong> In your Cloudflare dashboard, configure your Turnstile widget with <strong>Managed</strong> or <strong>Non-interactive</strong> mode for completely seamless customer verification.
+                            </div>
+                        </div>
+
+                        <!-- Frontend Rate Limiting -->
+                        <div class="wcotl-settings-card">
+                            <h2>
+                                <span class="dashicons dashicons-clock" style="color:#2271b1;"></span>
+                                Frontend IP Rate Limiting
+                            </h2>
+                            <p class="card-description">
+                                Protect against brute-force query attempts. Limits how many tracking code lookups can be made from a single IP address per minute.
+                            </p>
+
+                            <div class="wcotl-field-group">
+                                <label class="field-label" for="wcotl_rate_limit_max_requests">Max Requests Per Minute Per IP</label>
+                                <input type="number" id="wcotl_rate_limit_max_requests" name="wcotl_rate_limit_max_requests"
+                                       value="<?php echo esc_attr( $rate_limit_max ); ?>"
+                                       min="1" max="120" step="1" style="width:120px;">
+                                <div class="wcotl-field-help">Default: <code>15</code> requests/min. Excess requests are throttled with a 429 response.</div>
+                            </div>
+                        </div>
+
+                        <div class="wcotl-footer-actions">
+                            <button type="submit" class="button button-primary button-hero">
+                                <?php esc_html_e( 'Save Security Settings', 'wc-order-timeline' ); ?>
+                            </button>
+                        </div>
+                    </form>
+
+                <!-- ============================================================== -->
+                <!-- TAB 5: GENERAL & SYSTEM                                        -->
+                <!-- ============================================================== -->
+                <?php elseif ( $current_tab === 'system' ) :
+                    global $wpdb;
+                    $table_timeline = $wpdb->prefix . 'order_timeline';
+                    $table_meta     = $wpdb->prefix . 'order_timeline_meta';
+                    $table_presets  = $wpdb->prefix . 'order_timeline_presets';
+
+                    $count_steps = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $table_timeline" );
+                    $count_meta  = (int) $wpdb->get_var( "SELECT COUNT(DISTINCT tracking_code) FROM $table_meta" );
+                    $count_presets = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $table_presets" );
+                ?>
+
+                    <form method="POST" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                        <?php wp_nonce_field( 'wcotl_settings_nonce' ); ?>
+                        <input type="hidden" name="action" value="wcotl_save_settings">
+                        <input type="hidden" name="current_tab" value="system">
+                        <input type="hidden" name="wcotl_save_system_settings" value="1">
+
+                        <!-- Data Retention & Uninstall -->
+                        <div class="wcotl-settings-card">
+                            <h2>
+                                <span class="dashicons dashicons-trash" style="color:#d63638;"></span>
+                                <?php esc_html_e( 'Data Retention & Uninstall Preferences', 'wc-order-timeline' ); ?>
+                            </h2>
+                            <p class="card-description">
+                                Choose how the plugin handles database tables and stored tracking history when uninstalled.
+                            </p>
+
+                            <div class="wcotl-field-group">
+                                <label style="font-weight:normal;display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+                                    <input type="checkbox" name="wcotl_delete_data_on_uninstall" value="1" <?php checked( $delete_data_on_uninstall, 1 ); ?> style="margin-top:3px;">
+                                    <span>
+                                        <strong style="color:#1d2327;display:block;"><?php esc_html_e( 'Erase all plugin data upon uninstall', 'wc-order-timeline' ); ?></strong>
+                                        <span class="wcotl-field-help" style="margin-top:2px;display:block;">
+                                            If enabled, all custom database tables (<code><?php echo esc_html( $table_timeline ); ?></code>, <code><?php echo esc_html( $table_meta ); ?></code>, <code><?php echo esc_html( $table_presets ); ?></code>) and plugin options will be permanently dropped when deleting the plugin from WordPress. If unchecked (default), all data is safely preserved.
+                                        </span>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- System Status & Diagnostics -->
+                        <div class="wcotl-settings-card">
+                            <h2>
+                                <span class="dashicons dashicons-admin-tools" style="color:#2271b1;"></span>
+                                <?php esc_html_e( 'System Status & Diagnostics', 'wc-order-timeline' ); ?>
+                            </h2>
+                            <p class="card-description">
+                                Overview of environment versions and database table statistics.
+                            </p>
+
+                            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;">
+                                <div style="background:#f6f7f7;padding:12px;border-radius:4px;border:1px solid #dcdcde;">
+                                    <div style="font-size:11px;color:#646970;">WordPress / PHP</div>
+                                    <div style="font-size:14px;font-weight:600;color:#1d2327;margin-top:2px;">
+                                        WP <?php echo esc_html( get_bloginfo( 'version' ) ); ?> &bull; PHP <?php echo esc_html( PHP_VERSION ); ?>
+                                    </div>
+                                </div>
+
+                                <div style="background:#f6f7f7;padding:12px;border-radius:4px;border:1px solid #dcdcde;">
+                                    <div style="font-size:11px;color:#646970;">WooCommerce</div>
+                                    <div style="font-size:14px;font-weight:600;color:#1d2327;margin-top:2px;">
+                                        v<?php echo defined('WC_VERSION') ? esc_html( WC_VERSION ) : 'Unknown'; ?>
+                                    </div>
+                                </div>
+
+                                <div style="background:#f6f7f7;padding:12px;border-radius:4px;border:1px solid #dcdcde;">
+                                    <div style="font-size:11px;color:#646970;">Database Records</div>
+                                    <div style="font-size:13px;font-weight:600;color:#1d2327;margin-top:2px;">
+                                        <?php echo esc_html( number_format_i18n( $count_meta ) ); ?> codes &bull; <?php echo esc_html( number_format_i18n( $count_steps ) ); ?> steps
+                                    </div>
+                                </div>
+
+                                <div style="background:#f6f7f7;padding:12px;border-radius:4px;border:1px solid #dcdcde;">
+                                    <div style="font-size:11px;color:#646970;">Presets &amp; Milestones</div>
+                                    <div style="font-size:13px;font-weight:600;color:#1d2327;margin-top:2px;">
+                                        <?php echo esc_html( number_format_i18n( $count_presets ) ); ?> configured presets
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Frontend Shortcode Reference -->
+                        <div class="wcotl-settings-card">
+                            <h2>
+                                <span class="dashicons dashicons-shortcode" style="color:#0073aa;"></span>
+                                <?php esc_html_e( 'Frontend Tracking Shortcode', 'wc-order-timeline' ); ?>
+                            </h2>
+                            <p class="card-description">
+                                Place the tracking lookup form on any page or post so customers can track their orders:
+                            </p>
+
+                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                                <code id="wcotl-shortcode-snippet" style="font-size:14px;padding:6px 12px;background:#f0f0f1;border:1px solid #c3c4c7;border-radius:4px;">[wc_order_timeline_tracking]</code>
+                                <button type="button" class="button" onclick="wcotlCopyText('[wc_order_timeline_tracking]', this)">Copy Shortcode</button>
+                            </div>
+                            <div class="wcotl-field-help">
+                                Direct lookup URL parameter format: <code><?php echo esc_url( home_url( '/tracking/?tracking=TRK-XXXX-YYYY' ) ); ?></code>
+                            </div>
+                        </div>
+
+                        <div class="wcotl-footer-actions">
+                            <button type="submit" class="button button-primary button-hero">
+                                <?php esc_html_e( 'Save General Settings', 'wc-order-timeline' ); ?>
+                            </button>
+                        </div>
+                    </form>
+
+                <?php endif; ?>
+
             </div>
         </div>
 
         <script>
+        function wcotlToggleField(fieldId, btn) {
+            var field = document.getElementById(fieldId);
+            if (!field) return;
+            if (field.type === 'password') {
+                field.type = 'text';
+                btn.textContent = 'Hide';
+            } else {
+                field.type = 'password';
+                btn.textContent = 'Show';
+            }
+        }
+
+        function wcotlCopyText(text, btn) {
+            navigator.clipboard.writeText(text).then(function() {
+                var prevText = btn.textContent;
+                btn.textContent = '✓ Copied!';
+                setTimeout(function() { btn.textContent = prevText; }, 2000);
+            });
+        }
+
         function wcotlRefreshTrack123Quota(btn) {
             var disp = document.getElementById('wcotl-t123-quota-display');
             var bar  = document.getElementById('wcotl-t123-progress-bar');
@@ -920,22 +1295,6 @@ class WCOTL_Settings {
         }
         </script>
         <?php
-    }
-
-    /* ------------------------------------------------------------------
-     * AJAX: update delete data preference on uninstall
-     * ------------------------------------------------------------------ */
-
-    public static function ajax_set_uninstall_data_preference(): void {
-        check_ajax_referer( 'wcotl_uninstall_nonce', 'nonce' );
-        if ( ! current_user_can( 'delete_plugins' ) && ! current_user_can( 'manage_woocommerce' ) ) {
-            wp_send_json_error( 'Not allowed.' );
-        }
-
-        $delete_data = ! empty( $_POST['delete_data'] ) ? 1 : 0;
-        update_option( 'wcotl_delete_data_on_uninstall', $delete_data );
-
-        wp_send_json_success( [ 'delete_data' => $delete_data ] );
     }
 
     /* ------------------------------------------------------------------
@@ -1067,4 +1426,3 @@ class WCOTL_Settings {
         <?php
     }
 }
-

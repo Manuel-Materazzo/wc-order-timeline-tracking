@@ -429,7 +429,7 @@ class WCOTL_Rate_Comparator {
                             <strong><?php esc_html_e( 'Notice:', 'wc-order-timeline' ); ?></strong>
                             <span id="wcotl-rates-config-warning-text"></span>
                         </div>
-                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=wcotl-settings' ) ); ?>" class="button button-small" target="_blank" style="margin-left:12px;">
+                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=wcotl-settings&tab=rates' ) ); ?>" class="button button-small" target="_blank" style="margin-left:12px;">
                             <?php esc_html_e( 'Configure Providers', 'wc-order-timeline' ); ?> &rarr;
                         </a>
                     </div>
