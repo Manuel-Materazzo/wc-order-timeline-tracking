@@ -216,31 +216,18 @@ class WCOTL_Admin {
             $date    = trim( sanitize_text_field( wp_unslash( $_POST['step_date'] ?? '' ) ) );
             $icon    = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ) );
 
-            $dt = null;
-            if ( $date !== '' ) {
-                $dt = DateTime::createFromFormat( 'Y-m-d\TH:i', $date );
-                if ( ! $dt ) {
-                    $dt = DateTime::createFromFormat( 'Y-m-d H:i:s', $date );
-                }
-                if ( ! $dt ) {
-                    try {
-                        $dt = new DateTime( $date );
-                    } catch ( Exception $e ) {
-                        $dt = null;
-                    }
-                }
-            }
+            $utc_date = WCOTL_DB::local_input_to_utc( $date );
 
-            if ( $label && $dt ) {
+            if ( $label && $utc_date ) {
                 $wpdb->update( $table, [
-                    'step_date'  => $dt->format('Y-m-d H:i:s'),
+                    'step_date'  => $utc_date,
                     'step_label' => $label,
                     'step_note'  => $note,
                     'step_icon'  => $icon,
                 ], [ 'id' => $step_id ] );
                 echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Step updated successfully!', 'wc-order-timeline' ) . '</p></div>';
             } else {
-                echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please fill in a valid Date/Time and Description.', 'wc-order-timeline' ) . '</p></div>';
+                echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( $label ? __( 'The date/time is missing or invalid.', 'wc-order-timeline' ) : __( 'The step description is required.', 'wc-order-timeline' ) ) . '</p></div>';
             }
         } elseif (
             isset( $_GET['action'], $_GET['tracking_code'], $_GET['_wpnonce'] ) &&
@@ -273,7 +260,7 @@ class WCOTL_Admin {
             <h1>
                 <span class="dashicons dashicons-location-alt"></span>
                 Timeline Tracking
-                <a href="<?php echo admin_url('admin.php?page=wcotl-new-code'); ?>" class="button button-primary" style="margin-left:8px;">+ New Code</a>
+                <a href="<?php echo esc_url( admin_url( 'admin.php?page=wcotl-new-code' ) ); ?>" class="button button-primary" style="margin-left:8px;">+ New Code</a>
             </h1>
 
             <?php if ( $view_code ) :
@@ -281,7 +268,7 @@ class WCOTL_Admin {
             else : ?>
 
             <?php if ( empty( $codes ) ) : ?>
-                <div class="card"><p>No tracking codes found. <a href="<?php echo admin_url('admin.php?page=wcotl-new-code'); ?>">Create the first one</a></p></div>
+                <div class="card"><p>No tracking codes found. <a href="<?php echo esc_url( admin_url( 'admin.php?page=wcotl-new-code' ) ); ?>">Create the first one</a></p></div>
             <?php else : ?>
                 <table class="wp-list-table widefat fixed striped">
                     <thead>
@@ -301,17 +288,7 @@ class WCOTL_Admin {
                         );
                         $view_url   = admin_url( 'admin.php?page=wcotl-tracking&view=' . urlencode( $row->tracking_code ) );
 
-                        $last_update_ts = ! empty( $row->last_update ) ? strtotime( $row->last_update ) : false;
-                        if ( $last_update_ts !== false ) {
-                            $last_update_str = wp_date( $date_format . ' ' . $time_format, $last_update_ts, new DateTimeZone( 'UTC' ) );
-                        } else {
-                            try {
-                                $dt              = new DateTime( $row->last_update );
-                                $last_update_str = wp_date( $date_format . ' ' . $time_format, $dt->getTimestamp(), new DateTimeZone( 'UTC' ) );
-                            } catch ( Exception $e ) {
-                                $last_update_str = esc_html( $row->last_update ?? '—' );
-                            }
-                        }
+                        $last_update_str = WCOTL_DB::format_utc( $row->last_update, $date_format . ' ' . $time_format ) ?: '—';
                     ?>
                     <tr>
                         <td><span class="wcotl-code-badge"><?php echo esc_html( $row->tracking_code ); ?></span></td>
@@ -397,31 +374,18 @@ class WCOTL_Admin {
             $date    = trim( sanitize_text_field( wp_unslash( $_POST['step_date'] ?? '' ) ) );
             $icon    = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ) );
 
-            $dt = null;
-            if ( $date !== '' ) {
-                $dt = DateTime::createFromFormat( 'Y-m-d\TH:i', $date );
-                if ( ! $dt ) {
-                    $dt = DateTime::createFromFormat( 'Y-m-d H:i:s', $date );
-                }
-                if ( ! $dt ) {
-                    try {
-                        $dt = new DateTime( $date );
-                    } catch ( Exception $e ) {
-                        $dt = null;
-                    }
-                }
-            }
+            $utc_date = WCOTL_DB::local_input_to_utc( $date );
 
-            if ( $label && $dt ) {
+            if ( $label && $utc_date ) {
                 $wpdb->update( $table, [
-                    'step_date'  => $dt->format('Y-m-d H:i:s'),
+                    'step_date'  => $utc_date,
                     'step_label' => $label,
                     'step_note'  => $note,
                     'step_icon'  => $icon,
                 ], [ 'id' => $step_id ] );
                 $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Step updated successfully!', 'wc-order-timeline' ) . '</p></div>';
             } else {
-                $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please fill in a valid Date/Time and Description.', 'wc-order-timeline' ) . '</p></div>';
+                $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html( $label ? __( 'The date/time is missing or invalid.', 'wc-order-timeline' ) : __( 'The step description is required.', 'wc-order-timeline' ) ) . '</p></div>';
             }
         }
 
@@ -452,35 +416,22 @@ class WCOTL_Admin {
             $date  = trim( sanitize_text_field( wp_unslash( $_POST['step_date'] ?? '' ) ) );
             $icon  = sanitize_key( wp_unslash( $_POST['step_icon'] ?? 'truck' ) );
 
-            $dt = null;
-            if ( $date !== '' ) {
-                $dt = DateTime::createFromFormat( 'Y-m-d\TH:i', $date );
-                if ( ! $dt ) {
-                    $dt = DateTime::createFromFormat( 'Y-m-d H:i:s', $date );
-                }
-                if ( ! $dt ) {
-                    try {
-                        $dt = new DateTime( $date );
-                    } catch ( Exception $e ) {
-                        $dt = null;
-                    }
-                }
-            }
+            $utc_date = WCOTL_DB::local_input_to_utc( $date );
 
-            if ( $label && $dt ) {
+            if ( $label && $utc_date ) {
                 $stored_order_id = absint( WCOTL_DB::get_meta( $code, 'order_id' ) );
 
                 $wpdb->insert( $table, [
                     'tracking_code' => $code,
                     'order_id'      => $stored_order_id,
-                    'step_date'     => $dt->format('Y-m-d H:i:s'),
+                    'step_date'     => $utc_date,
                     'step_label'    => $label,
                     'step_note'     => $note,
                     'step_icon'     => $icon,
                 ] );
                 $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Step added successfully!', 'wc-order-timeline' ) . '</p></div>';
             } else {
-                $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please fill in a valid Date/Time and Description.', 'wc-order-timeline' ) . '</p></div>';
+                $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html( $label ? __( 'The date/time is missing or invalid.', 'wc-order-timeline' ) : __( 'The step description is required.', 'wc-order-timeline' ) ) . '</p></div>';
             }
         }
 
@@ -1311,20 +1262,8 @@ class WCOTL_Admin {
                 <?php else : ?>
                 <ul class="wcotl-steps-list">
                     <?php foreach ( $steps as $s ) :
-                        $step_ts = ! empty( $s->step_date ) ? strtotime( $s->step_date ) : false;
-                        if ( $step_ts !== false ) {
-                            $step_date_str  = wp_date( $date_format . ' ' . $time_format, $step_ts, new DateTimeZone( 'UTC' ) );
-                            $input_date_val = wp_date( 'Y-m-d\TH:i', $step_ts, new DateTimeZone( 'UTC' ) );
-                        } else {
-                            try {
-                                $dt             = new DateTime( $s->step_date );
-                                $step_date_str  = wp_date( $date_format . ' ' . $time_format, $dt->getTimestamp(), new DateTimeZone( 'UTC' ) );
-                                $input_date_val = $dt->format( 'Y-m-d\TH:i' );
-                            } catch ( Exception $e ) {
-                                $step_date_str  = esc_html( $s->step_date ?? '' );
-                                $input_date_val = '';
-                            }
-                        }
+                        $step_date_str  = WCOTL_DB::format_utc( $s->step_date, $date_format . ' ' . $time_format );
+                        $input_date_val = WCOTL_DB::format_utc( $s->step_date, 'Y-m-d\TH:i' );
                         $del = wp_nonce_url(
                             admin_url('admin.php?page=wcotl-tracking&view=' . urlencode($code) . '&action=delete_step&step_id=' . $s->id),
                             'wcotl_delete_step_' . absint( $s->id )

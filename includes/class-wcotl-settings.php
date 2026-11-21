@@ -47,7 +47,7 @@ class WCOTL_Settings {
             'wcotl-tracking',
             __( 'Tracking Settings', 'wc-order-timeline' ),
             __( '⚙ Settings', 'wc-order-timeline' ),
-            'manage_woocommerce',
+            'manage_options',
             'wcotl-settings',
             [ __CLASS__, 'page' ]
         );
@@ -70,6 +70,7 @@ class WCOTL_Settings {
         register_setting( 'wcotl_settings_group', 'wcotl_turnstile_site_key',        'sanitize_text_field' );
         register_setting( 'wcotl_settings_group', 'wcotl_turnstile_secret_key',      'sanitize_text_field' );
         register_setting( 'wcotl_settings_group', 'wcotl_rate_limit_max_requests',   'absint' );
+        register_setting( 'wcotl_settings_group', 'wcotl_trust_proxy_headers',       'absint' );
         register_setting( 'wcotl_settings_group', 'wcotl_paccofacile_account_number', 'sanitize_text_field' );
         register_setting( 'wcotl_settings_group', 'wcotl_paccofacile_api_key',        'sanitize_text_field' );
         register_setting( 'wcotl_settings_group', 'wcotl_paccofacile_token',          'sanitize_text_field' );
@@ -84,8 +85,28 @@ class WCOTL_Settings {
      * Save handler
      * ------------------------------------------------------------------ */
 
+    /**
+     * Secrets are never echoed back into the form. An empty submission keeps the
+     * stored value; a non-empty one replaces it; the Clear button removes it.
+     */
+    private static function save_secret( string $option ): void {
+        $clear = isset( $_POST['wcotl_clear_secrets'] ) && is_array( $_POST['wcotl_clear_secrets'] )
+            ? array_map( 'sanitize_key', wp_unslash( $_POST['wcotl_clear_secrets'] ) )
+            : array();
+        if ( in_array( $option, $clear, true ) ) {
+            delete_option( $option );
+            return;
+        }
+        if ( isset( $_POST[ $option ] ) ) {
+            $value = trim( sanitize_text_field( wp_unslash( $_POST[ $option ] ) ) );
+            if ( $value !== '' ) {
+                update_option( $option, $value );
+            }
+        }
+    }
+
     public static function save_settings(): void {
-        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+        if ( ! current_user_can( 'manage_options' ) ) {
             wp_die( esc_html__( 'Not allowed.', 'wc-order-timeline' ) );
         }
         check_admin_referer( 'wcotl_settings_nonce' );
@@ -97,23 +118,16 @@ class WCOTL_Settings {
         }
 
         // --- Tracking Providers Tab ---
-        if ( isset( $_POST['wcotl_17track_api_key'] ) ) {
-            update_option( 'wcotl_17track_api_key', sanitize_text_field( wp_unslash( $_POST['wcotl_17track_api_key'] ) ) );
-        }
-        if ( isset( $_POST['wcotl_track123_api_key'] ) ) {
-            $track123_key = sanitize_text_field( wp_unslash( $_POST['wcotl_track123_api_key'] ) );
-            update_option( 'wcotl_track123_api_key', $track123_key );
-            delete_transient( 'wcotl_track123_quota_' . md5( $track123_key ) );
-        }
-        if ( isset( $_POST['wcotl_packlink_api_key'] ) ) {
-            update_option( 'wcotl_packlink_api_key', sanitize_text_field( wp_unslash( $_POST['wcotl_packlink_api_key'] ) ) );
+        self::save_secret( 'wcotl_17track_api_key' );
+        $old_track123_key = (string) get_option( 'wcotl_track123_api_key', '' );
+        self::save_secret( 'wcotl_track123_api_key' );
+        if ( (string) get_option( 'wcotl_track123_api_key', '' ) !== $old_track123_key && $old_track123_key !== '' ) {
+            delete_transient( 'wcotl_track123_quota_' . md5( $old_track123_key ) );
         }
         if ( isset( $_POST['wcotl_fedex_client_id'] ) ) {
             update_option( 'wcotl_fedex_client_id', sanitize_text_field( wp_unslash( $_POST['wcotl_fedex_client_id'] ) ) );
         }
-        if ( isset( $_POST['wcotl_fedex_client_secret'] ) ) {
-            update_option( 'wcotl_fedex_client_secret', sanitize_text_field( wp_unslash( $_POST['wcotl_fedex_client_secret'] ) ) );
-        }
+        self::save_secret( 'wcotl_fedex_client_secret' );
         if ( isset( $_POST['wcotl_fedex_environment'] ) ) {
             $fedex_environment = sanitize_key( wp_unslash( $_POST['wcotl_fedex_environment'] ) );
             update_option( 'wcotl_fedex_environment', $fedex_environment === 'sandbox' ? 'sandbox' : 'production' );
@@ -133,12 +147,8 @@ class WCOTL_Settings {
         if ( isset( $_POST['wcotl_paccofacile_account_number'] ) ) {
             update_option( 'wcotl_paccofacile_account_number', sanitize_text_field( wp_unslash( $_POST['wcotl_paccofacile_account_number'] ) ) );
         }
-        if ( isset( $_POST['wcotl_paccofacile_api_key'] ) ) {
-            update_option( 'wcotl_paccofacile_api_key', sanitize_text_field( wp_unslash( $_POST['wcotl_paccofacile_api_key'] ) ) );
-        }
-        if ( isset( $_POST['wcotl_paccofacile_token'] ) ) {
-            update_option( 'wcotl_paccofacile_token', sanitize_text_field( wp_unslash( $_POST['wcotl_paccofacile_token'] ) ) );
-        }
+        self::save_secret( 'wcotl_paccofacile_api_key' );
+        self::save_secret( 'wcotl_paccofacile_token' );
         if ( isset( $_POST['wcotl_paccofacile_environment'] ) ) {
             $pacco_env = sanitize_key( wp_unslash( $_POST['wcotl_paccofacile_environment'] ) );
             update_option( 'wcotl_paccofacile_environment', $pacco_env === 'sandbox' ? 'sandbox' : 'live' );
@@ -164,12 +174,14 @@ class WCOTL_Settings {
         if ( isset( $_POST['wcotl_turnstile_site_key'] ) ) {
             update_option( 'wcotl_turnstile_site_key', sanitize_text_field( wp_unslash( $_POST['wcotl_turnstile_site_key'] ) ) );
         }
-        if ( isset( $_POST['wcotl_turnstile_secret_key'] ) ) {
-            update_option( 'wcotl_turnstile_secret_key', sanitize_text_field( wp_unslash( $_POST['wcotl_turnstile_secret_key'] ) ) );
-        }
+        self::save_secret( 'wcotl_turnstile_secret_key' );
         if ( isset( $_POST['wcotl_rate_limit_max_requests'] ) ) {
             $rate_limit_max = max( 1, absint( $_POST['wcotl_rate_limit_max_requests'] ) );
             update_option( 'wcotl_rate_limit_max_requests', $rate_limit_max );
+        }
+
+        if ( $current_tab === 'security' ) {
+            update_option( 'wcotl_trust_proxy_headers', ! empty( $_POST['wcotl_trust_proxy_headers'] ) ? 1 : 0 );
         }
 
         // --- General & System Tab ---
@@ -179,7 +191,7 @@ class WCOTL_Settings {
         }
 
         $redirect_url = admin_url( 'admin.php?page=wcotl-settings&tab=' . $current_tab . '&saved=1' );
-        wp_redirect( $redirect_url );
+        wp_safe_redirect( $redirect_url );
         exit;
     }
 
@@ -303,6 +315,8 @@ class WCOTL_Settings {
                 WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_SYNC_STOPPED,  '' );
                 WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_STOP_REASON,   '' );
                 WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_LAST_STATUS,   '' );
+                WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_FAIL_COUNT,    '' );
+                WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_FIRST_FAIL_AT, '' );
             }
             WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_NEXT_SYNC_AT,  '' );
         } else {
@@ -369,6 +383,8 @@ class WCOTL_Settings {
         WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_STOP_REASON,  '' );
         WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_LAST_STATUS,  '' );
         WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_NEXT_SYNC_AT, '' );
+        WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_FAIL_COUNT, '' );
+        WCOTL_DB::set_meta( $tracking_code, WCOTL_Auto_Sync::META_FIRST_FAIL_AT, '' );
 
         wp_send_json_success( __( 'Sync resumed.', 'wc-order-timeline' ) );
     }
@@ -437,6 +453,7 @@ class WCOTL_Settings {
         $turnstile_site_key   = get_option( 'wcotl_turnstile_site_key', '' );
         $turnstile_secret_key = get_option( 'wcotl_turnstile_secret_key', '' );
         $rate_limit_max       = max( 1, (int) get_option( 'wcotl_rate_limit_max_requests', 15 ) );
+        $trust_proxy_headers  = (bool) get_option( 'wcotl_trust_proxy_headers', false );
         $turnstile_configured = ( ! empty( $turnstile_site_key ) && ! empty( $turnstile_secret_key ) );
 
         // System data
@@ -667,9 +684,9 @@ class WCOTL_Settings {
                                 <label class="field-label" for="wcotl_17track_api_key">17TRACK API Key</label>
                                 <div class="wcotl-input-with-button">
                                     <input type="password" id="wcotl_17track_api_key" name="wcotl_17track_api_key"
-                                           value="<?php echo esc_attr( $api_key ); ?>"
-                                           placeholder="Paste your 17TRACK API key">
-                                    <button type="button" class="button" onclick="wcotlToggleField('wcotl_17track_api_key', this)">Show</button>
+                                           value="" autocomplete="new-password"
+                                           placeholder="<?php echo $api_key ? '•••••••• (saved – leave empty to keep)' : 'Paste your 17TRACK API key'; ?>">
+                                    <?php if ( $api_key ) : ?><button type="button" class="button" onclick="wcotlClearSecret('wcotl_17track_api_key', this)">Clear</button><?php endif; ?>
                                 </div>
                                 <div class="wcotl-field-help">Leave empty to disable 17TRACK automatic tracking.</div>
                             </div>
@@ -697,9 +714,9 @@ class WCOTL_Settings {
                                 <label class="field-label" for="wcotl_track123_api_key">Track123 API Key / Secret</label>
                                 <div class="wcotl-input-with-button">
                                     <input type="password" id="wcotl_track123_api_key" name="wcotl_track123_api_key"
-                                           value="<?php echo esc_attr( $track123_api_key ); ?>"
-                                           placeholder="Paste your Track123 API Secret">
-                                    <button type="button" class="button" onclick="wcotlToggleField('wcotl_track123_api_key', this)">Show</button>
+                                           value="" autocomplete="new-password"
+                                           placeholder="<?php echo $track123_api_key ? '•••••••• (saved – leave empty to keep)' : 'Paste your Track123 API Secret'; ?>">
+                                    <?php if ( $track123_api_key ) : ?><button type="button" class="button" onclick="wcotlClearSecret('wcotl_track123_api_key', this)">Clear</button><?php endif; ?>
                                 </div>
                                 <div class="wcotl-field-help">Leave empty to disable Track123 automatic tracking.</div>
                             </div>
@@ -769,9 +786,9 @@ class WCOTL_Settings {
                                     <label class="field-label" for="wcotl_packlink_api_key">Packlink PRO API Key</label>
                                     <div class="wcotl-input-with-button">
                                         <input type="password" id="wcotl_packlink_api_key" name="wcotl_packlink_api_key"
-                                               value="<?php echo esc_attr( $packlink_api_key ); ?>"
-                                               placeholder="Paste your Packlink PRO API key">
-                                        <button type="button" class="button" onclick="wcotlToggleField('wcotl_packlink_api_key', this)">Show</button>
+                                               value="" autocomplete="new-password"
+                                               placeholder="<?php echo $packlink_api_key ? '•••••••• (saved – leave empty to keep)' : 'Paste your Packlink PRO API key'; ?>">
+                                        <?php if ( $packlink_api_key ) : ?><button type="button" class="button" onclick="wcotlClearSecret('wcotl_packlink_api_key', this)">Clear</button><?php endif; ?>
                                     </div>
                                     <div class="wcotl-field-help">Leave empty to disable Packlink auto-tracking.</div>
                                 </div>
@@ -798,15 +815,16 @@ class WCOTL_Settings {
                                        value="<?php echo esc_attr( $fedex_client_id ); ?>"
                                        placeholder="e.g. l7xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                                        style="max-width:580px;font-family:monospace;width:100%;">
+                                <?php if ( $paccofacile_key ) : ?><button type="button" class="button" onclick="wcotlClearSecret('wcotl_paccofacile_api_key', this)">Clear</button><?php endif; ?>
                             </div>
 
                             <div class="wcotl-field-group">
                                 <label class="field-label" for="wcotl_fedex_client_secret">FedEx Secret Key / Client Secret</label>
                                 <div class="wcotl-input-with-button">
                                     <input type="password" id="wcotl_fedex_client_secret" name="wcotl_fedex_client_secret"
-                                           value="<?php echo esc_attr( $fedex_client_secret ); ?>"
-                                           placeholder="Paste your FedEx Secret Key">
-                                    <button type="button" class="button" onclick="wcotlToggleField('wcotl_fedex_client_secret', this)">Show</button>
+                                           value="" autocomplete="new-password"
+                                           placeholder="<?php echo $fedex_client_secret ? '•••••••• (saved – leave empty to keep)' : 'Paste your FedEx Secret Key'; ?>">
+                                    <?php if ( $fedex_client_secret ) : ?><button type="button" class="button" onclick="wcotlClearSecret('wcotl_fedex_client_secret', this)">Clear</button><?php endif; ?>
                                 </div>
                                 <div class="wcotl-field-help">Used to obtain OAuth 2.0 Bearer tokens for FedEx REST tracking.</div>
                             </div>
@@ -942,9 +960,9 @@ class WCOTL_Settings {
 
                             <div class="wcotl-field-group">
                                 <label class="field-label" for="wcotl_paccofacile_api_key">Paccofacile API Key</label>
-                                <input type="text" id="wcotl_paccofacile_api_key" name="wcotl_paccofacile_api_key"
-                                       value="<?php echo esc_attr( $paccofacile_key ); ?>"
-                                       placeholder="e.g. pf_live_xxxxxxxxxxxxxxxxxxxxxxxx"
+                                <input type="password" id="wcotl_paccofacile_api_key" name="wcotl_paccofacile_api_key" autocomplete="new-password"
+                                       value=""
+                                       placeholder="<?php echo $paccofacile_key ? '•••••••• (saved – leave empty to keep)' : 'e.g. pf_live_xxxxxxxxxxxxxxxxxxxxxxxx'; ?>"
                                        style="max-width:580px;font-family:monospace;width:100%;">
                             </div>
 
@@ -952,9 +970,9 @@ class WCOTL_Settings {
                                 <label class="field-label" for="wcotl_paccofacile_token">Paccofacile Bearer Token</label>
                                 <div class="wcotl-input-with-button">
                                     <input type="password" id="wcotl_paccofacile_token" name="wcotl_paccofacile_token"
-                                           value="<?php echo esc_attr( $paccofacile_token ); ?>"
-                                           placeholder="Paste your Paccofacile Bearer Token">
-                                    <button type="button" class="button" onclick="wcotlToggleField('wcotl_paccofacile_token', this)">Show</button>
+                                           value="" autocomplete="new-password"
+                                           placeholder="<?php echo $paccofacile_token ? '•••••••• (saved – leave empty to keep)' : 'Paste your Paccofacile Bearer Token'; ?>">
+                                    <?php if ( $paccofacile_token ) : ?><button type="button" class="button" onclick="wcotlClearSecret('wcotl_paccofacile_token', this)">Clear</button><?php endif; ?>
                                 </div>
                             </div>
 
@@ -1074,9 +1092,9 @@ class WCOTL_Settings {
                                 <label class="field-label" for="wcotl_turnstile_secret_key">Cloudflare Turnstile Secret Key</label>
                                 <div class="wcotl-input-with-button">
                                     <input type="password" id="wcotl_turnstile_secret_key" name="wcotl_turnstile_secret_key"
-                                           value="<?php echo esc_attr( $turnstile_secret_key ); ?>"
-                                           placeholder="e.g. 0x4AAAAAA...">
-                                    <button type="button" class="button" onclick="wcotlToggleField('wcotl_turnstile_secret_key', this)">Show</button>
+                                           value="" autocomplete="new-password"
+                                           placeholder="<?php echo $turnstile_secret_key ? '•••••••• (saved – leave empty to keep)' : 'e.g. 0x4AAAAAA...'; ?>">
+                                    <?php if ( $turnstile_secret_key ) : ?><button type="button" class="button" onclick="wcotlClearSecret('wcotl_turnstile_secret_key', this)">Clear</button><?php endif; ?>
                                 </div>
                                 <div class="wcotl-field-help">Used to securely verify Turnstile challenge tokens server-side upon customer lookup.</div>
                             </div>
@@ -1102,6 +1120,17 @@ class WCOTL_Settings {
                                        value="<?php echo esc_attr( $rate_limit_max ); ?>"
                                        min="1" max="120" step="1" style="width:120px;">
                                 <div class="wcotl-field-help">Default: <code>15</code> requests/min. Excess requests are throttled with a 429 response.</div>
+                            </div>
+
+                            <div class="wcotl-field-group">
+                                <label>
+                                    <input type="checkbox" name="wcotl_trust_proxy_headers" value="1" <?php checked( $trust_proxy_headers ); ?>>
+                                    Trust proxy headers (<code>CF-Connecting-IP</code>, <code>X-Forwarded-For</code>)
+                                </label>
+                                <div class="wcotl-field-help">
+                                    Enable <strong>only</strong> if this site is behind Cloudflare or a reverse proxy/load balancer; otherwise every visitor shares the proxy's IP for rate limiting.
+                                    Leave disabled on sites that are directly reachable, because the headers can be forged to bypass rate limits.
+                                </div>
                             </div>
                         </div>
 
@@ -1228,6 +1257,17 @@ class WCOTL_Settings {
         </div>
 
         <script>
+        function wcotlClearSecret(optName, btn) {
+            var field = document.getElementById(optName);
+            var form  = btn.closest('form');
+            if (!field || !form) return;
+            var h = document.createElement('input');
+            h.type = 'hidden'; h.name = 'wcotl_clear_secrets[]'; h.value = optName;
+            form.appendChild(h);
+            field.value = '';
+            field.placeholder = 'Will be cleared when you save';
+            btn.disabled = true;
+        }
         function wcotlToggleField(fieldId, btn) {
             var field = document.getElementById(fieldId);
             if (!field) return;

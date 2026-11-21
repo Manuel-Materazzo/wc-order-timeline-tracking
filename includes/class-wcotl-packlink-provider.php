@@ -618,18 +618,11 @@ class WCOTL_Packlink_Provider extends WCOTL_Tracking_Provider {
     }
 
     /**
-     * Convert a Unix timestamp to a MySQL datetime in the WordPress timezone.
+     * Convert a Unix timestamp to a UTC MySQL datetime.
      */
     private function format_date( int $ts ): string {
-        try {
-            $dt = new DateTime( '@' . $ts );
-            if ( function_exists( 'wp_timezone' ) ) {
-                $dt->setTimezone( wp_timezone() );
-            }
-            return $dt->format( 'Y-m-d H:i:s' );
-        } catch ( Exception $e ) {
-            return gmdate( 'Y-m-d H:i:s', $ts );
-        }
+        // Unix timestamps are absolute; store as UTC.
+        return gmdate( 'Y-m-d H:i:s', $ts );
     }
 
     private function error_response( string $message ): array {

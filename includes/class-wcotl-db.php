@@ -29,8 +29,95 @@ class WCOTL_DB {
      */
     private static ?array $presets_cache = null;
 
+    const DB_VERSION = '1.6.0';
+
     public static function init(): void {
         add_action( 'admin_init', array( __CLASS__, 'maybe_upgrade' ) );
+        // Remove the timeline once an order is permanently deleted (not when trashed).
+        add_action( 'woocommerce_delete_order', array( __CLASS__, 'delete_timeline_for_order' ) );
+        add_action( 'before_delete_post', array( __CLASS__, 'on_before_delete_post' ), 10, 2 );
+    }
+
+    /**
+     * Legacy (non-HPOS) storage: only react to real orders, never other post types.
+     *
+     * @param int          $post_id
+     * @param WP_Post|null $post
+     */
+    public static function on_before_delete_post( $post_id, $post = null ): void {
+        $type = $post instanceof WP_Post ? $post->post_type : get_post_type( $post_id );
+        if ( 'shop_order' === $type ) {
+            self::delete_timeline_for_order( $post_id );
+        }
+    }
+
+    /**
+     * Delete timeline rows and meta linked to a permanently deleted order.
+     * One code belongs to one order, so everything for that code goes with it.
+     *
+     * @param int|string $order_id
+     */
+    public static function delete_timeline_for_order( $order_id ): void {
+        $order_id = absint( $order_id );
+        if ( ! $order_id ) {
+            return;
+        }
+        global $wpdb;
+        $table = $wpdb->prefix . 'order_timeline';
+        $meta  = $wpdb->prefix . 'order_timeline_meta';
+
+        $codes = $wpdb->get_col( $wpdb->prepare(
+            "SELECT tracking_code FROM {$table} WHERE order_id = %d
+             UNION
+             SELECT tracking_code FROM {$meta} WHERE meta_key = 'order_id' AND meta_value = %s",
+            $order_id,
+            (string) $order_id
+        ) );
+        if ( empty( $codes ) ) {
+            return;
+        }
+        foreach ( $codes as $code ) {
+            $wpdb->delete( $table, array( 'tracking_code' => $code ) );
+            $wpdb->delete( $meta, array( 'tracking_code' => $code ) );
+        }
+        self::clear_order_tracking_codes_cache();
+        self::clear_delivered_at_cache();
+    }
+
+    /**
+     * Parse a datetime entered in the admin (site-local time) into a UTC MySQL string.
+     */
+    public static function local_input_to_utc( string $raw ): ?string {
+        $raw = trim( $raw );
+        if ( '' === $raw ) {
+            return null;
+        }
+        $tz = wp_timezone();
+        $dt = DateTime::createFromFormat( 'Y-m-d\TH:i', $raw, $tz )
+            ?: DateTime::createFromFormat( 'Y-m-d H:i:s', $raw, $tz );
+        if ( ! $dt ) {
+            try {
+                $dt = new DateTime( $raw, $tz );
+            } catch ( Exception $e ) {
+                return null;
+            }
+        }
+        return $dt->setTimezone( new DateTimeZone( 'UTC' ) )->format( 'Y-m-d H:i:s' );
+    }
+
+    /**
+     * Format a stored UTC MySQL datetime in the site timezone.
+     */
+    public static function format_utc( ?string $mysql, string $format ): string {
+        if ( empty( $mysql ) ) {
+            return '';
+        }
+        try {
+            $dt = new DateTime( $mysql, new DateTimeZone( 'UTC' ) );
+            return wp_date( $format, $dt->getTimestamp() );
+        } catch ( Exception $e ) {
+            return (string) $mysql;
+        }
     }
 
     public static function activate(): void {
@@ -53,7 +140,8 @@ class WCOTL_DB {
             created_at       DATETIME            NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY  (id),
             KEY tracking_code (tracking_code),
-            KEY order_id (order_id)
+            KEY order_id (order_id),
+            UNIQUE KEY step_unique (tracking_code, step_date, step_label(100), step_source)
         ) $charset;";
 
         $sql_meta = "CREATE TABLE IF NOT EXISTS $meta (
@@ -82,16 +170,20 @@ class WCOTL_DB {
         dbDelta( $sql_meta );
         dbDelta( $sql_presets );
 
-        update_option( 'wcotl_db_version', '1.5.1' );
+        // Fresh installs get the current version; existing installs are stamped by maybe_upgrade() after migrating.
+        if ( ! get_option( 'wcotl_db_version' ) ) {
+            update_option( 'wcotl_db_version', self::DB_VERSION );
+        }
     }
 
     public static function maybe_upgrade(): void {
-        if ( get_option( 'wcotl_db_version' ) !== '1.5.1' ) {
+        if ( get_option( 'wcotl_db_version' ) !== self::DB_VERSION ) {
             if ( get_transient( 'wcotl_db_upgrade_lock' ) ) {
                 return;
             }
-            set_transient( 'wcotl_db_upgrade_lock', 1, HOUR_IN_SECONDS );
+            set_transient( 'wcotl_db_upgrade_lock', 1, 5 * MINUTE_IN_SECONDS );
 
+            $from = (string) get_option( 'wcotl_db_version', '' );
             WCOTL_DB::activate();
             // Migrate: add columns that may not exist in older installs.
             global $wpdb;
@@ -117,8 +209,82 @@ class WCOTL_DB {
             // Note: the auto-sync cursor lives in a meta row (auto_tracking_next_sync_at);
             // the unused next_sync_at column from early 1.5.1 builds is intentionally not created.
 
+            if ( $from !== '' && version_compare( $from, '1.6.0', '<' ) ) {
+                self::migrate_dates_to_utc();
+            }
+            // Always (idempotent): collapse duplicates so the unique key can be created.
+            self::remove_duplicate_steps();
+            $has_key = $wpdb->get_var( "SHOW INDEX FROM $table WHERE Key_name = 'step_unique'" );
+            if ( ! $has_key ) {
+                $wpdb->query( "ALTER TABLE $table ADD UNIQUE KEY step_unique (tracking_code, step_date, step_label(100), step_source)" );
+            }
+            update_option( 'wcotl_db_version', self::DB_VERSION );
+
             delete_transient( 'wcotl_db_upgrade_lock' );
         }
+    }
+
+    /**
+     * One-off: step dates used to be stored as site-local wall time (and shown
+     * as if UTC). Convert every stored step date and last-event cursor to UTC.
+     */
+    private static function migrate_dates_to_utc(): void {
+        global $wpdb;
+        $table = $wpdb->prefix . 'order_timeline';
+        $meta  = $wpdb->prefix . 'order_timeline_meta';
+        $tz    = wp_timezone();
+        $utc   = new DateTimeZone( 'UTC' );
+        $conv  = static function ( string $v ) use ( $tz, $utc ): ?string {
+            try {
+                return ( new DateTime( $v, $tz ) )->setTimezone( $utc )->format( 'Y-m-d H:i:s' );
+            } catch ( Exception $e ) {
+                return null;
+            }
+        };
+
+        $last_id = 0;
+        do {
+            $rows = $wpdb->get_results( $wpdb->prepare(
+                "SELECT id, step_date FROM $table WHERE id > %d ORDER BY id ASC LIMIT 1000",
+                $last_id
+            ) );
+            foreach ( $rows as $r ) {
+                $last_id = (int) $r->id;
+                $new     = $conv( $r->step_date );
+                if ( $new && $new !== $r->step_date ) {
+                    // IGNORE: a unique-key clash is resolved later by duplicate cleanup.
+                    $wpdb->query( $wpdb->prepare( "UPDATE IGNORE $table SET step_date = %s WHERE id = %d", $new, $r->id ) );
+                }
+            }
+        } while ( count( $rows ) === 1000 );
+
+        $cursors = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, meta_value FROM $meta WHERE meta_key = %s AND meta_value != ''",
+            'auto_tracking_last_event_date'
+        ) );
+        foreach ( $cursors as $c ) {
+            $new = $conv( $c->meta_value );
+            if ( $new ) {
+                $wpdb->update( $meta, array( 'meta_value' => $new ), array( 'id' => $c->id ) );
+            }
+        }
+    }
+
+    /**
+     * Delete duplicate steps (same code, date, label and source), keeping the oldest row.
+     */
+    private static function remove_duplicate_steps(): void {
+        global $wpdb;
+        $table = $wpdb->prefix . 'order_timeline';
+        $wpdb->query(
+            "DELETE t1 FROM $table t1
+             INNER JOIN $table t2
+                     ON t1.tracking_code = t2.tracking_code
+                    AND t1.step_date     = t2.step_date
+                    AND t1.step_source   = t2.step_source
+                    AND LEFT(t1.step_label, 100) = LEFT(t2.step_label, 100)
+                    AND t1.id > t2.id"
+        );
     }
 
     public static function get_meta( string $tracking_code, string $key ): ?string {

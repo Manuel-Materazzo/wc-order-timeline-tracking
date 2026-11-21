@@ -106,6 +106,12 @@ class WCOTL_Auto_Sync {
     /** Meta key: consecutive failed sync attempts (drives exponential backoff). */
     const META_FAIL_COUNT = 'auto_tracking_fail_count';
 
+    /** Meta key: UTC datetime of the first failure in the current failure streak. */
+    const META_FIRST_FAIL_AT = 'auto_tracking_first_fail_at';
+
+    /** Stop retrying (mark as failed) after this many seconds of continuous failures. */
+    const MAX_FAILURE_WINDOW = 7 * DAY_IN_SECONDS;
+
     /**
      * Main sync method – executed by WP-Cron.
      *
@@ -221,9 +227,22 @@ class WCOTL_Auto_Sync {
             if ( $failed ) {
                 $fails = (int) WCOTL_DB::get_meta( $tracking_code, self::META_FAIL_COUNT ) + 1;
                 WCOTL_DB::set_meta( $tracking_code, self::META_FAIL_COUNT, (string) $fails );
+                $first_fail = WCOTL_DB::get_meta( $tracking_code, self::META_FIRST_FAIL_AT );
+                if ( ! $first_fail ) {
+                    $first_fail = gmdate( 'Y-m-d H:i:s' );
+                    WCOTL_DB::set_meta( $tracking_code, self::META_FIRST_FAIL_AT, $first_fail );
+                }
                 $delay = (int) min( DAY_IN_SECONDS, $interval_seconds * ( 2 ** min( $fails, 6 ) ) );
+
+                // Give up once failures have persisted for 7 days.
+                $first_ts = strtotime( $first_fail . ' UTC' );
+                if ( $first_ts && ( time() - $first_ts ) >= self::MAX_FAILURE_WINDOW ) {
+                    self::stop_sync( $tracking_code, 'failed', 0, (string) ( $result['error'] ?? '' ) );
+                    continue;
+                }
             } elseif ( isset( $result['step'] ) && 'complete' === $result['step'] && WCOTL_DB::get_meta( $tracking_code, self::META_FAIL_COUNT ) ) {
                 WCOTL_DB::set_meta( $tracking_code, self::META_FAIL_COUNT, '' );
+                WCOTL_DB::set_meta( $tracking_code, self::META_FIRST_FAIL_AT, '' );
             }
             WCOTL_DB::set_meta(
                 $tracking_code,
@@ -324,7 +343,9 @@ class WCOTL_Auto_Sync {
             $delivered_date = current_time( 'Y-m-d' );
             if ( $last_event_date ) {
                 try {
-                    $delivered_date = ( new DateTime( $last_event_date ) )->format( 'Y-m-d' );
+                    // Events are stored in UTC; delivered_at is a calendar date in the site timezone.
+                    $delivered_date = ( new DateTime( $last_event_date, new DateTimeZone( 'UTC' ) ) )
+                        ->setTimezone( wp_timezone() )->format( 'Y-m-d' );
                 } catch ( Exception ) {
                     // Keep current time fallback.
                 }
@@ -470,7 +491,7 @@ class WCOTL_Auto_Sync {
                 $values[]       = $row['step_icon'];
                 $values[]       = $row['step_source'];
             }
-            $query = "INSERT INTO {$table} (tracking_code, order_id, step_date, step_label, step_note, step_icon, step_source) VALUES " . implode( ', ', $placeholders );
+            $query = "INSERT IGNORE INTO {$table} (tracking_code, order_id, step_date, step_label, step_note, step_icon, step_source) VALUES " . implode( ', ', $placeholders );
             $wpdb->query( $wpdb->prepare( $query, $values ) );
         }
 
@@ -480,12 +501,13 @@ class WCOTL_Auto_Sync {
     /**
      * Mark a tracking code's auto-sync as stopped.
      */
-    private static function stop_sync( string $tracking_code, string $reason, int $days = 0 ) {
+    private static function stop_sync( string $tracking_code, string $reason, int $days = 0, string $detail = '' ) {
         WCOTL_DB::set_meta( $tracking_code, self::META_SYNC_STOPPED, '1' );
         $reason_text = match( $reason ) {
             'delivered'  => 'Shipment delivered.',
             'expired'    => 'Shipment marked as expired by the provider.',
             'inactivity' => "No status update for {$days} days.",
+            'failed'     => 'Marked as failed: the provider kept returning errors for 7 days.' . ( $detail !== '' ? ' Last error: ' . $detail : '' ),
             default      => $reason,
         };
         WCOTL_DB::set_meta( $tracking_code, self::META_STOP_REASON, $reason_text );

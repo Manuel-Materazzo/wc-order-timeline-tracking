@@ -194,7 +194,7 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
 
         foreach ( $providers as $provider ) {
             foreach ( $provider['events'] ?? [] as $ev ) {
-                $time_str = $ev['time_iso'] ?? $ev['time_utc'] ?? '';
+                $time_str = $ev['time_utc'] ?? $ev['time_iso'] ?? '';
                 $date     = $this->parse_17track_date( $time_str );
                 $label    = sanitize_text_field( $ev['description'] ?? '' );
 
@@ -352,10 +352,9 @@ class WCOTL_17track_Provider extends WCOTL_Tracking_Provider {
             return null;
         }
         try {
-            $dt = new DateTime( $raw );
-            if ( function_exists( 'wp_timezone' ) ) {
-                $dt->setTimezone( wp_timezone() );
-            }
+            // Naive strings are assumed UTC; strings with an offset are converted to UTC.
+            $dt = new DateTime( $raw, new DateTimeZone( 'UTC' ) );
+            $dt->setTimezone( new DateTimeZone( 'UTC' ) );
             return $dt->format( 'Y-m-d H:i:s' );
         } catch ( Exception $e ) {
             return null;
