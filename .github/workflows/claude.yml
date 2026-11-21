@@ -12,7 +12,7 @@ on:
 jobs:
   claude:
     if: |
-      github.actor == 'IL-TUO-USERNAME-GITHUB' && (
+      github.actor == 'Manuel-Materazzo' && (
       contains(github.event.comment.body, '@claude') ||
       contains(github.event.issue.body, '@claude') ||
       contains(github.event.review.body, '@claude')

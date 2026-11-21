@@ -1,0 +1,87 @@
+name: Fix Security Advisory (Sonnet)
+on:
+  workflow_dispatch:
+    inputs:
+      ghsa_id:
+        description: 'Security Advisory ID  (es. GHSA-xxxx-xxxx-xxxx)'
+        required: true
+        type: string
+      mode:
+        description: 'Fix Output mode'
+        required: true
+        default: 'patch-artifact'
+        type: choice
+        options:
+          - patch-artifact # saves a .patch file into Artifacts
+          - draft-pr       # create branch and open Draft PR
+
+jobs:
+  fix-advisory:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      security-events: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Fetch Advisory Details
+        id: advisory
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHSA_ID: ${{ inputs.ghsa_id }}
+        run: |
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/security-advisories/$GHSA_ID > advisory.json
+
+          SUMMARY=$(jq -r '.summary' advisory.json)
+          echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
+
+      - name: Implement Fix with Sonnet
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: "--model claude-sonnet-5-5"
+          prompt: |
+            Read the `advisory.json` file present in the root of the repository: it contains a issue to be fixed.
+              1. Analyze the described vulnerability and implement a clean, complete, and secure fix in your code.
+              2. Run any tests or linters available in the project to verify that nothing is broken.
+              3. DO NOT commit or push: leave all changes in the local working tree and delete `advisory.json` before finishing.
+
+      - name: Export Private Patch Artifact
+        if: inputs.mode == 'patch-artifact'
+        run: |
+          rm -f advisory.json
+          git status
+          git diff > fix-${{ inputs.ghsa_id }}.patch
+
+      - name: Upload Patch Artifact
+        if: inputs.mode == 'patch-artifact'
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-fix-${{ inputs.ghsa_id }}
+          path: fix-${{ inputs.ghsa_id }}.patch
+          retention-days: 14
+
+      - name: Create Draft PR
+        if: inputs.mode == 'draft-pr'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          rm -f advisory.json
+          BRANCH="security-fix/${{ inputs.ghsa_id }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "fix(security): resolve ${{ inputs.ghsa_id }}"
+          git push -u origin "$BRANCH"
+
+          gh pr create \
+            --draft \
+            --title "fix(security): ${{ steps.advisory.outputs.summary }}" \
+            --body "Fixes issue \`${{ inputs.ghsa_id }}\`."

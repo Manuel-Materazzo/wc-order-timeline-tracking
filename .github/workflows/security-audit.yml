@@ -1,0 +1,52 @@
+name: Weekly Security Scan (Opus)
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+jobs:
+  audit-and-advise:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: "--model claude-opus-5-5"
+          prompt: |
+            Perform a thorough security audit on the codebase (bugs, security issues, edge cases, improvement areas...).
+            If you do NOT find any real or relevant issues, write exactly `{"found": false}` in `audit.json`.
+            If you find one or more issues, write in `audit.json`:
+              {
+                "found": true,
+                "summary": "Short title of the main vulnerability",
+                "description": "Detailed report in Markdown with files, lines of code, impact and remediation plan",
+                "severity": "high"
+              }
+            (Use severity among: low, medium, high, critical). Do not modify other files.
+
+      - name: Create Draft Security Advisory
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FOUND=$(jq -r '.found // false' audit.json)
+          if [ "$FOUND" = "true" ]; then
+            SUMMARY=$(jq -r '.summary' audit.json)
+            DESCRIPTION=$(jq -r '.description' audit.json)
+            SEVERITY=$(jq -r '.severity' audit.json)
+
+            gh api \
+              --method POST \
+              -H "Accept: application/vnd.github+json" \
+              /repos/${{ github.repository }}/security-advisories \
+              -f summary="$SUMMARY" \
+              -f description="$DESCRIPTION" \
+              -f severity="$SEVERITY"
+          fi
