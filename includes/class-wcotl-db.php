@@ -114,17 +114,8 @@ class WCOTL_DB {
                 }
             }
 
-            // 1.5.1: per-shipment next_sync_at cursor for the auto-sync engine.
-            $meta_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $meta ) );
-            if ( $meta_exists === $meta ) {
-                $meta_cols = $wpdb->get_col( "SHOW COLUMNS FROM $meta" );
-                if ( is_array( $meta_cols ) && empty( $wpdb->last_error ) ) {
-                    if ( ! in_array( 'next_sync_at', $meta_cols, true ) ) {
-                        $wpdb->query( "ALTER TABLE $meta ADD COLUMN next_sync_at DATETIME DEFAULT NULL" );
-                        $wpdb->query( "ALTER TABLE $meta ADD INDEX idx_next_sync_at (next_sync_at)" );
-                    }
-                }
-            }
+            // Note: the auto-sync cursor lives in a meta row (auto_tracking_next_sync_at);
+            // the unused next_sync_at column from early 1.5.1 builds is intentionally not created.
 
             delete_transient( 'wcotl_db_upgrade_lock' );
         }
@@ -147,11 +138,14 @@ class WCOTL_DB {
         if ( $value === '' || $value === null ) {
             $wpdb->delete( $meta, [ 'tracking_code' => $tracking_code, 'meta_key' => $key ] );
         } else {
-            $wpdb->replace( $meta, [
-                'tracking_code' => $tracking_code,
-                'meta_key'      => $key,
-                'meta_value'    => $value,
-            ] );
+            // Upsert (keeps the row id stable, unlike REPLACE). Relies on UNIQUE KEY tracking_meta.
+            $wpdb->query( $wpdb->prepare(
+                "INSERT INTO $meta (tracking_code, meta_key, meta_value) VALUES (%s, %s, %s)
+                 ON DUPLICATE KEY UPDATE meta_value = VALUES(meta_value)",
+                $tracking_code,
+                $key,
+                (string) $value
+            ) );
         }
 
         if ( $key === 'delivered_at' ) {

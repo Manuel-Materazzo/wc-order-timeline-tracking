@@ -103,6 +103,9 @@ class WCOTL_Auto_Sync {
      */
     const META_NEXT_SYNC_AT = 'auto_tracking_next_sync_at';
 
+    /** Meta key: consecutive failed sync attempts (drives exponential backoff). */
+    const META_FAIL_COUNT = 'auto_tracking_fail_count';
+
     /**
      * Main sync method – executed by WP-Cron.
      *
@@ -208,14 +211,24 @@ class WCOTL_Auto_Sync {
             }
 
             // Each code resolves its own provider (17TRACK or Packlink PRO).
-            self::sync_code( $tracking_code );
+            $result = self::sync_code( $tracking_code );
 
-            // Advance the per-shipment cursor regardless of whether sync_code
-            // found new events – we still checked, that counts as a sync.
+            // Advance the per-shipment cursor. Failures back off exponentially
+            // (interval * 2^failures, capped at 24h) so a provider outage or a
+            // permanently rejected code does not burn quota on every tick.
+            $failed = isset( $result['step'] ) && in_array( $result['step'], [ 'registration_failed', 'fetch_failed' ], true );
+            $delay  = $interval_seconds;
+            if ( $failed ) {
+                $fails = (int) WCOTL_DB::get_meta( $tracking_code, self::META_FAIL_COUNT ) + 1;
+                WCOTL_DB::set_meta( $tracking_code, self::META_FAIL_COUNT, (string) $fails );
+                $delay = (int) min( DAY_IN_SECONDS, $interval_seconds * ( 2 ** min( $fails, 6 ) ) );
+            } elseif ( isset( $result['step'] ) && 'complete' === $result['step'] && WCOTL_DB::get_meta( $tracking_code, self::META_FAIL_COUNT ) ) {
+                WCOTL_DB::set_meta( $tracking_code, self::META_FAIL_COUNT, '' );
+            }
             WCOTL_DB::set_meta(
                 $tracking_code,
                 self::META_NEXT_SYNC_AT,
-                gmdate( 'Y-m-d H:i:s', time() + $interval_seconds )
+                gmdate( 'Y-m-d H:i:s', time() + $delay )
             );
         }
     }
