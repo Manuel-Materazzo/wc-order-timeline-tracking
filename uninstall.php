@@ -9,6 +9,8 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 
 // Clear scheduled cron hook
 wp_clear_scheduled_hook( 'wcotl_auto_sync' );
+delete_transient( 'wcotl_sync_lock' );
+delete_transient( 'wcotl_db_upgrade_lock' );
 
 // Only delete database tables and options if explicitly configured in settings.
 $delete_data = get_option( 'wcotl_delete_data_on_uninstall', 0 );
@@ -47,4 +49,12 @@ if ( ! empty( $delete_data ) ) {
     delete_option( 'wcotl_default_package_length' );
     delete_option( 'wcotl_default_package_width' );
     delete_option( 'wcotl_default_package_height' );
+    delete_option( 'wcotl_trust_proxy_headers' );
+
+    // Remove cached tokens and rate-limit transients (plus their timeout rows).
+    $wpdb->query(
+        "DELETE FROM {$wpdb->options}
+         WHERE option_name LIKE '\\_transient\\_wcotl\\_%'
+            OR option_name LIKE '\\_transient\\_timeout\\_wcotl\\_%'"
+    );
 }

@@ -95,12 +95,19 @@ class WCOTL_Shortcode {
      * @return bool True if rate limited, false otherwise.
      */
     public static function check_rate_limit( string $client_ip, int $max_requests = 15 ): bool {
+        // Fixed 60s window: the expiry is set once and NOT renewed on later hits,
+        // so a limited client is unblocked 60s after its first request in the window.
         $transient_key = 'wcotl_rate_' . md5( $client_ip );
-        $current_count = (int) get_transient( $transient_key );
-        $current_count++;
-        set_transient( $transient_key, $current_count, 60 );
+        $now           = time();
+        $state         = get_transient( $transient_key );
+        if ( ! is_array( $state ) || empty( $state['start'] ) || ( $now - (int) $state['start'] ) >= 60 ) {
+            $state = [ 'start' => $now, 'count' => 0 ];
+        }
+        $state['count']++;
+        $ttl = max( 1, 60 - ( $now - (int) $state['start'] ) );
+        set_transient( $transient_key, $state, $ttl );
 
-        return $current_count > $max_requests;
+        return $state['count'] > $max_requests;
     }
 
     /**
@@ -189,7 +196,7 @@ class WCOTL_Shortcode {
         $max_requests     = max( 1, (int) get_option( 'wcotl_rate_limit_max_requests', 15 ) );
         $client_ip        = self::get_client_ip();
 
-        $code             = isset( $_GET['tracking'] ) ? sanitize_text_field( wp_unslash( $_GET['tracking'] ) ) : '';
+        $code             = isset( $_GET['tracking'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_GET['tracking'] ) ) ) : '';
         $turnstile_token  = isset( $_REQUEST['cf-turnstile-response'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['cf-turnstile-response'] ) ) : '';
         $steps            = [];
         $error            = '';
