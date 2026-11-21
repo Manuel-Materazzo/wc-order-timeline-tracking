@@ -353,20 +353,8 @@ class WCOTL_Shortcode {
                         $icon_svg  = $icons[ $icon_key ] ?? $icons['truck'];
                         $delay     = $i * 80; // ms
 
-                        $step_ts = strtotime( $step->step_date );
-                        if ( $step_ts !== false ) {
-                            $date_fmt = wp_date( $site_date_format, $step_ts, new DateTimeZone( 'UTC' ) );
-                            $time_fmt = wp_date( $site_time_format, $step_ts, new DateTimeZone( 'UTC' ) );
-                        } else {
-                            try {
-                                $dt       = new DateTime( $step->step_date );
-                                $date_fmt = wp_date( $site_date_format, $dt->getTimestamp(), new DateTimeZone( 'UTC' ) );
-                                $time_fmt = wp_date( $site_time_format, $dt->getTimestamp(), new DateTimeZone( 'UTC' ) );
-                            } catch ( Exception $e ) {
-                                $date_fmt = esc_html( $step->step_date );
-                                $time_fmt = '';
-                            }
-                        }
+                        $date_fmt = WCOTL_DB::format_utc( $step->step_date, $site_date_format );
+                        $time_fmt = WCOTL_DB::format_utc( $step->step_date, $site_time_format );
 
                         $is_voided = ! empty( $step->step_voided );
                         // "last active" = l'ultimo step NON annullato

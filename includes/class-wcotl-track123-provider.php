@@ -412,7 +412,7 @@ class WCOTL_Track123_Provider extends WCOTL_Tracking_Provider {
 
         foreach ( $checkpoint_groups as $group ) {
             foreach ( $group as $detail ) {
-                $time_str = $detail['eventTime'] ?? $detail['eventTimeZeroUTC'] ?? '';
+                $time_str = $detail['eventTimeZeroUTC'] ?? $detail['eventTime'] ?? '';
                 $date     = $this->parse_date( $time_str );
                 $label    = sanitize_text_field( $detail['eventDetail'] ?? '' );
                 $address  = sanitize_text_field( $detail['address'] ?? '' );
@@ -452,7 +452,9 @@ class WCOTL_Track123_Provider extends WCOTL_Tracking_Provider {
             return null;
         }
         try {
-            $dt = new DateTime( $time_str );
+            // eventTimeZeroUTC is UTC; offset-bearing strings are converted to UTC.
+            $dt = new DateTime( $time_str, new DateTimeZone( 'UTC' ) );
+            $dt->setTimezone( new DateTimeZone( 'UTC' ) );
             return $dt->format( 'Y-m-d H:i:s' );
         } catch ( Exception ) {
             return null;
