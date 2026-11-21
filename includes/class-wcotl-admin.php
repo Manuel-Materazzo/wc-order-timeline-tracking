@@ -10,6 +10,7 @@ class WCOTL_Admin {
 
     public static function init(): void {
         add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
+        add_action( 'admin_init', array( __CLASS__, 'handle_new_code_post' ) );
         add_action( 'admin_head', array( __CLASS__, 'admin_styles' ) );
         add_action( 'admin_head', array( __CLASS__, 'admin_nonce_script' ) );
         add_filter( 'admin_title', array( __CLASS__, 'admin_page_title' ), 10, 2 );
@@ -59,6 +60,25 @@ class WCOTL_Admin {
         }
 
         return $admin_title;
+    }
+
+    /**
+     * Edit URL for an order, correct for both HPOS and legacy post storage.
+     */
+    public static function order_edit_url( int $order_id ): string {
+        $order = function_exists( 'wc_get_order' ) ? wc_get_order( $order_id ) : false;
+        if ( $order ) {
+            return $order->get_edit_order_url();
+        }
+        return admin_url( 'post.php?post=' . $order_id . '&action=edit' );
+    }
+
+    /**
+     * Validate a Y-m-d date; returns '' when invalid.
+     */
+    private static function sanitize_ymd( string $value ): string {
+        $d = DateTime::createFromFormat( '!Y-m-d', $value );
+        return ( $d && $d->format( 'Y-m-d' ) === $value ) ? $value : '';
     }
 
     public static function register_menu(): void {
@@ -156,12 +176,16 @@ class WCOTL_Admin {
         if (
             isset( $_GET['action'], $_GET['step_id'], $_GET['_wpnonce'] ) &&
             $_GET['action'] === 'delete_step' &&
-            wp_verify_nonce( $_GET['_wpnonce'], 'wcotl_delete_step' )
+            wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'wcotl_delete_step_' . absint( $_GET['step_id'] ) )
         ) {
             if ( ! current_user_can( 'manage_woocommerce' ) ) {
                 wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
             }
-            $wpdb->delete( $table, [ 'id' => absint( $_GET['step_id'] ) ] );
+            $del_where = [ 'id' => absint( $_GET['step_id'] ) ];
+            if ( ! empty( $_GET['view'] ) ) {
+                $del_where['tracking_code'] = strtoupper( sanitize_text_field( wp_unslash( $_GET['view'] ) ) );
+            }
+            $wpdb->delete( $table, $del_where );
             echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Step deleted.', 'wc-order-timeline' ) . '</p></div>';
         } elseif (
             isset( $_GET['action'], $_GET['step_id'], $_GET['_wpnonce'] ) &&
@@ -291,7 +315,7 @@ class WCOTL_Admin {
                     ?>
                     <tr>
                         <td><span class="wcotl-code-badge"><?php echo esc_html( $row->tracking_code ); ?></span></td>
-                        <td><?php echo $row->order_id ? '<a href="' . esc_url( admin_url( 'post.php?post=' . $row->order_id . '&action=edit' ) ) . '">#' . esc_html( $row->order_id ) . '</a>' : '—'; ?></td>
+                        <td><?php echo $row->order_id ? '<a href="' . esc_url( self::order_edit_url( (int) $row->order_id ) ) . '">#' . esc_html( $row->order_id ) . '</a>' : '—'; ?></td>
                         <td><?php echo absint( $row->steps ); ?></td>
                         <td><?php echo esc_html( $last_update_str ); ?></td>
                         <td>
@@ -321,7 +345,7 @@ class WCOTL_Admin {
             if ( ! current_user_can( 'manage_woocommerce' ) ) {
                 wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
             }
-            $delivery_date = sanitize_text_field( wp_unslash( $_POST['estimated_delivery'] ?? '' ) );
+            $delivery_date = self::sanitize_ymd( sanitize_text_field( wp_unslash( $_POST['estimated_delivery'] ?? '' ) ) );
             WCOTL_DB::set_meta( $code, 'estimated_delivery', $delivery_date );
             $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Estimated delivery date updated.', 'wc-order-timeline' ) . '</p></div>';
         }
@@ -331,7 +355,7 @@ class WCOTL_Admin {
             if ( ! current_user_can( 'manage_woocommerce' ) ) {
                 wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
             }
-            $delivered_date = sanitize_text_field( wp_unslash( $_POST['delivered_at'] ?? '' ) );
+            $delivered_date = self::sanitize_ymd( sanitize_text_field( wp_unslash( $_POST['delivered_at'] ?? '' ) ) );
             WCOTL_DB::set_meta( $code, 'delivered_at', $delivered_date );
             $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Actual delivery date updated.', 'wc-order-timeline' ) . '</p></div>';
         }
@@ -528,7 +552,7 @@ class WCOTL_Admin {
     	
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
     		<?php if ( $order_id ) : ?>
-                <a href="<?php echo esc_url( admin_url('post.php?post=' . $order_id . '&action=edit') ); ?>" class="button button-secondary button-small">Order #<?php echo $order_id; ?></a>
+                <a href="<?php echo esc_url( self::order_edit_url( (int) $order_id ) ); ?>" class="button button-secondary button-small">Order #<?php echo esc_html( $order_id ); ?></a>
             <?php endif; ?>
     		<h2 style="margin:0;">
     			Code: 
@@ -565,7 +589,7 @@ class WCOTL_Admin {
                 </button>
                 <?php if ( $order_id ) : ?>
                     <span style="font-size:12px;color:#1e8449;padding-bottom:10px;">
-                        ✓ Order #<?php echo $order_id; ?>
+                        ✓ Order #<?php echo esc_html( $order_id ); ?>
                     </span>
                 <?php else : ?>
                     <span style="font-size:12px;color:#888;padding-bottom:10px;">No order associated</span>
@@ -1303,7 +1327,7 @@ class WCOTL_Admin {
                         }
                         $del = wp_nonce_url(
                             admin_url('admin.php?page=wcotl-tracking&view=' . urlencode($code) . '&action=delete_step&step_id=' . $s->id),
-                            'wcotl_delete_step'
+                            'wcotl_delete_step_' . absint( $s->id )
                         );
                         $edit_nonce = wp_create_nonce( 'wcotl_edit_step_' . $s->id );
                         $unvoid_nonce = wp_nonce_url(
@@ -1506,10 +1530,18 @@ class WCOTL_Admin {
         <?php
     }
 
-    public static function page_new_code(): void {
-        $notice = '';
+    /** @var string Notice produced by handle_new_code_post() for page_new_code(). */
+    private static $new_code_notice = '';
 
-        if ( isset( $_POST['wcotl_create_code'], $_POST['_wpnonce'] ) && wp_verify_nonce( $_POST['_wpnonce'], 'wcotl_create_code' ) ) {
+    /**
+     * Handle the New Code form before any output so the redirect works.
+     */
+    public static function handle_new_code_post(): void {
+        if ( ! isset( $_GET['page'] ) || 'wcotl-new-code' !== $_GET['page'] ) {
+            return;
+        }
+
+        if ( isset( $_POST['wcotl_create_code'], $_POST['_wpnonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'wcotl_create_code' ) ) {
             if ( ! current_user_can( 'manage_woocommerce' ) ) {
                 wp_die( esc_html__( 'Unauthorized.', 'wc-order-timeline' ), 403 );
             }
@@ -1523,7 +1555,7 @@ class WCOTL_Admin {
                 $exists_in_steps = $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE tracking_code = %s LIMIT 1", $code ) );
                 $exists_in_meta  = $exists_in_steps ? null : $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$meta_table} WHERE tracking_code = %s LIMIT 1", $code ) );
                 if ( $exists_in_steps || $exists_in_meta ) {
-                    $notice = '<div class="notice notice-error is-dismissible"><p>' . sprintf( esc_html__( 'Tracking code "%s" already exists. Please choose a different code.', 'wc-order-timeline' ), esc_html( $code ) ) . '</p></div>';
+                    self::$new_code_notice = '<div class="notice notice-error is-dismissible"><p>' . sprintf( esc_html__( 'Tracking code "%s" already exists. Please choose a different code.', 'wc-order-timeline' ), esc_html( $code ) ) . '</p></div>';
                 } else {
                     $order_id_from_post = absint( $_POST['order_id'] ?? 0 );
                     if ( $order_id_from_post ) {
@@ -1553,13 +1585,17 @@ class WCOTL_Admin {
                         WCOTL_Auto_Sync::sync_code( $code );
                     }
 
-                    wp_redirect( admin_url('admin.php?page=wcotl-tracking&view=' . urlencode($code) ) );
+                    wp_safe_redirect( admin_url('admin.php?page=wcotl-tracking&view=' . urlencode($code) ) );
                     exit;
                 }
             } else {
-                $notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please enter a valid code (minimum 3 characters, letters, numbers, hyphens only).', 'wc-order-timeline' ) . '</p></div>';
+                self::$new_code_notice = '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Please enter a valid code (minimum 3 characters, letters, numbers, hyphens only).', 'wc-order-timeline' ) . '</p></div>';
             }
         }
+    }
+
+    public static function page_new_code(): void {
+        $notice = self::$new_code_notice;
 
         $order_id            = absint( $_GET['order_id'] ?? 0 );
         $packlink_data       = $order_id ? WCOTL_Packlink_Provider::get_order_packlink_data( $order_id ) : null;

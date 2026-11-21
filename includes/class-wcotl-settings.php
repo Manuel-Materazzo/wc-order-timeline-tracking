@@ -375,7 +375,7 @@ class WCOTL_Settings {
 
     public static function ajax_set_uninstall_data_preference(): void {
         check_ajax_referer( 'wcotl_uninstall_nonce', 'nonce' );
-        if ( ! current_user_can( 'delete_plugins' ) && ! current_user_can( 'manage_woocommerce' ) ) {
+        if ( ! current_user_can( 'delete_plugins' ) ) {
             wp_send_json_error( __( 'Not allowed.', 'wc-order-timeline' ) );
         }
 
