@@ -98,6 +98,17 @@ class WCOTL_Shortcode {
         // Fixed 60s window: the expiry is set once and NOT renewed on later hits,
         // so a limited client is unblocked 60s after its first request in the window.
         $transient_key = 'wcotl_rate_' . md5( $client_ip );
+
+        // Atomic path: with a persistent object cache, wp_cache_incr is atomic.
+        if ( wp_using_ext_object_cache() ) {
+            $group = 'wcotl_rate';
+            wp_cache_add( $transient_key, 0, $group, 60 );
+            $count = wp_cache_incr( $transient_key, 1, $group );
+            if ( false !== $count ) {
+                return (int) $count > $max_requests;
+            }
+        }
+
         $now           = time();
         $state         = get_transient( $transient_key );
         if ( ! is_array( $state ) || empty( $state['start'] ) || ( $now - (int) $state['start'] ) >= 60 ) {
@@ -118,6 +129,9 @@ class WCOTL_Shortcode {
     public static function reset_rate_limit( string $client_ip ): void {
         $transient_key = 'wcotl_rate_' . md5( $client_ip );
         delete_transient( $transient_key );
+        if ( wp_using_ext_object_cache() ) {
+            wp_cache_delete( $transient_key, 'wcotl_rate' );
+        }
     }
 
     /**
@@ -213,7 +227,7 @@ class WCOTL_Shortcode {
                     self::reset_rate_limit( $client_ip );
                 } else {
                     self::check_rate_limit( $client_ip, $max_requests );
-                    $error          = __( 'Security verification failed. Please complete the challenge and try again.', 'wc-order-timeline' );
+                    $error          = esc_html__( 'Security verification failed. Please complete the challenge and try again.', 'wc-order-timeline' );
                     $show_turnstile = true;
                 }
             } else {
@@ -221,10 +235,10 @@ class WCOTL_Shortcode {
 
                 if ( $is_rate_limited ) {
                     if ( $turnstile_active ) {
-                        $error          = __( 'Security verification required. Please complete the challenge below before searching.', 'wc-order-timeline' );
+                        $error          = esc_html__( 'Security verification required. Please complete the challenge below before searching.', 'wc-order-timeline' );
                         $show_turnstile = true;
                     } else {
-                        $error          = __( 'Too many tracking requests. Please wait a minute and try again.', 'wc-order-timeline' );
+                        $error          = esc_html__( 'Too many tracking requests. Please wait a minute and try again.', 'wc-order-timeline' );
                     }
                 }
             }
@@ -243,8 +257,8 @@ class WCOTL_Shortcode {
                 if ( empty( $steps ) ) {
                     $error = sprintf(
                         /* translators: %s is the tracking code */
-                        __( 'No order found for tracking code <strong>%s</strong>. Please verify the code and try again.', 'wc-order-timeline' ),
-                        esc_html( $code )
+                        esc_html__( 'No order found for tracking code %s. Please verify the code and try again.', 'wc-order-timeline' ),
+                        '<strong>' . esc_html( $code ) . '</strong>'
                     );
                 }
             }
@@ -305,7 +319,7 @@ class WCOTL_Shortcode {
             </div>
 
             <?php if ( $error ) : ?>
-                <div class="wcotl-error"><?php echo wp_kses_post( $error ); ?></div>
+                <div class="wcotl-error"><?php echo wp_kses( $error, array( 'strong' => array() ) ); ?></div>
             <?php endif; ?>
 
             <?php if ( ! empty( $steps ) ) : ?>

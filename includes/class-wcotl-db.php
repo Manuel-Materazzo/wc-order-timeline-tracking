@@ -29,7 +29,7 @@ class WCOTL_DB {
      */
     private static ?array $presets_cache = null;
 
-    const DB_VERSION = '1.6.0';
+    const DB_VERSION = '1.6.1';
 
     public static function init(): void {
         add_action( 'admin_init', array( __CLASS__, 'maybe_upgrade' ) );
@@ -150,7 +150,8 @@ class WCOTL_DB {
             meta_key      VARCHAR(128)        NOT NULL,
             meta_value    TEXT                         DEFAULT NULL,
             PRIMARY KEY  (id),
-            UNIQUE KEY tracking_meta (tracking_code, meta_key)
+            UNIQUE KEY tracking_meta (tracking_code, meta_key),
+            KEY meta_lookup (meta_key, meta_value(40))
         ) $charset;";
 
         $preset      = $wpdb->prefix . 'order_timeline_presets';
@@ -217,6 +218,11 @@ class WCOTL_DB {
             $has_key = $wpdb->get_var( "SHOW INDEX FROM $table WHERE Key_name = 'step_unique'" );
             if ( ! $has_key ) {
                 $wpdb->query( "ALTER TABLE $table ADD UNIQUE KEY step_unique (tracking_code, step_date, step_label(100), step_source)" );
+            }
+            // Index for order_id -> tracking code lookups (avoids full scans on the order list).
+            $has_meta_idx = $wpdb->get_var( "SHOW INDEX FROM $meta WHERE Key_name = 'meta_lookup'" );
+            if ( ! $has_meta_idx ) {
+                $wpdb->query( "ALTER TABLE $meta ADD KEY meta_lookup (meta_key, meta_value(40))" );
             }
             update_option( 'wcotl_db_version', self::DB_VERSION );
 
