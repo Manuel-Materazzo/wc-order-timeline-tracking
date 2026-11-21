@@ -31,7 +31,7 @@ jobs:
       - name: Fetch Advisory Details
         id: advisory
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.SECURITY_ADVISORY_TOKEN }}
           GHSA_ID: ${{ inputs.ghsa_id }}
         run: |
           gh api \

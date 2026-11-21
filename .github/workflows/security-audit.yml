@@ -34,7 +34,7 @@ jobs:
 
       - name: Create Draft Security Advisory
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.SECURITY_ADVISORY_TOKEN }}
         run: |
           FOUND=$(jq -r '.found // false' audit.json)
           if [ "$FOUND" = "true" ]; then
