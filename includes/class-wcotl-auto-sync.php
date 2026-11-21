@@ -139,6 +139,25 @@ class WCOTL_Auto_Sync {
             $time_budget = max( 10, $max_execution - 10 );
         }
 
+        // Prevent overlapping runs (a slow run must not be doubled by the next tick).
+        $lock_key = 'wcotl_sync_lock';
+        if ( get_transient( $lock_key ) ) {
+            return;
+        }
+        set_transient( $lock_key, 1, max( 60, $time_budget + 60 ) );
+
+        try {
+            self::run_sync_locked( $time_budget, $meta_table );
+        } finally {
+            delete_transient( $lock_key );
+        }
+    }
+
+    /**
+     * Body of run_sync(), executed while holding the lock.
+     */
+    private static function run_sync_locked( int $time_budget, string $meta_table ): void {
+        global $wpdb;
         $start = microtime( true );
 
         // How far ahead to schedule the next sync for each processed shipment.
@@ -157,7 +176,7 @@ class WCOTL_Auto_Sync {
          */
         $codes = $wpdb->get_col(
             $wpdb->prepare(
-                "SELECT DISTINCT m.tracking_code
+                "SELECT m.tracking_code, MIN(ns.meta_value) AS due_at
                  FROM {$meta_table} m
                  LEFT JOIN {$meta_table} ns
                         ON ns.tracking_code = m.tracking_code
@@ -171,7 +190,8 @@ class WCOTL_Auto_Sync {
                          AND st.meta_key = %s
                          AND st.meta_value = '1'
                    )
-                 ORDER BY ns.meta_value ASC
+                 GROUP BY m.tracking_code
+                 ORDER BY due_at ASC
                  LIMIT 500",
                 self::META_NEXT_SYNC_AT,
                 self::META_REAL_NUMBER,

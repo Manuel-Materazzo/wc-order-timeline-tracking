@@ -31,14 +31,25 @@ class WCOTL_Shortcode {
      * @return string
      */
     public static function get_client_ip(): string {
-        $ip = '';
-        if ( ! empty( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) {
-            $ip = sanitize_text_field( wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ) );
-        } elseif ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
-            $forwarded = explode( ',', sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) );
-            $ip = trim( $forwarded[0] );
-        } elseif ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
-            $ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
+        $remote = '';
+        if ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
+            $remote = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
+        }
+        $ip = $remote;
+
+        // Proxy headers are client-controlled unless the site sits behind a proxy
+        // that sets them. Only honour them when explicitly enabled (option or filter).
+        $trust_proxy = (bool) apply_filters( 'wcotl_trust_proxy_headers', (bool) get_option( 'wcotl_trust_proxy_headers', false ) );
+        if ( $trust_proxy ) {
+            if ( ! empty( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) {
+                $ip = sanitize_text_field( wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ) );
+            } elseif ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
+                $forwarded = explode( ',', sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) );
+                $ip        = trim( $forwarded[0] );
+            }
+            if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+                $ip = $remote;
+            }
         }
 
         return filter_var( $ip, FILTER_VALIDATE_IP ) ? $ip : '127.0.0.1';
