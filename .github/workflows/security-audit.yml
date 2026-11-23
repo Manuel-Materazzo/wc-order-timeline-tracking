@@ -38,15 +38,26 @@ jobs:
         run: |
           FOUND=$(jq -r '.found // false' audit.json)
           if [ "$FOUND" = "true" ]; then
-            SUMMARY=$(jq -r '.summary' audit.json)
-            DESCRIPTION=$(jq -r '.description' audit.json)
-            SEVERITY=$(jq -r '.severity' audit.json)
-
-            gh api \
+            jq -n \
+              --arg summary "$(jq -r '.summary' audit.json)" \
+              --arg description "$(jq -r '.description' audit.json)" \
+              --arg severity "$(jq -r '.severity // "medium"' audit.json)" \
+              --arg pkg "${{ github.event.repository.name }}" \
+              '{
+                summary: $summary,
+                description: $description,
+                severity: $severity,
+                vulnerabilities: [
+                  {
+                    package: {
+                      ecosystem: "other",
+                      name: $pkg
+                    }
+                  }
+                ]
+              }' | gh api \
               --method POST \
               -H "Accept: application/vnd.github+json" \
               /repos/${{ github.repository }}/security-advisories \
-              -f summary="$SUMMARY" \
-              -f description="$DESCRIPTION" \
-              -f severity="$SEVERITY"
+              --input -
           fi
